@@ -1,0 +1,132 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StaffTable } from "@/components/staff/staff-table";
+import { StaffFormDialog } from "@/components/staff/staff-form";
+
+interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  role: string;
+  employmentType: string;
+  fte: number;
+  hireDate: string;
+  icuCompetencyLevel: number;
+  isChargeNurseQualified: boolean;
+  certifications: string[];
+  reliabilityRating: number;
+  isActive: boolean;
+  notes: string | null;
+}
+
+export default function StaffPage() {
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+
+  const fetchStaff = useCallback(async () => {
+    const res = await fetch("/api/staff");
+    const data = await res.json();
+    setStaff(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchStaff();
+  }, [fetchStaff]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleSave(data: any) {
+    if (editingStaff) {
+      await fetch(`/api/staff/${editingStaff.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    } else {
+      await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    }
+    setDialogOpen(false);
+    setEditingStaff(null);
+    fetchStaff();
+  }
+
+  function handleEdit(id: string) {
+    const member = staff.find((s) => s.id === id);
+    if (member) {
+      setEditingStaff(member);
+      setDialogOpen(true);
+    }
+  }
+
+  function handleAdd() {
+    setEditingStaff(null);
+    setDialogOpen(true);
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Staff Management</h1>
+          <p className="mt-1 text-muted-foreground">
+            {staff.length} staff members ({staff.filter((s) => s.isActive).length} active)
+          </p>
+        </div>
+        <Button onClick={handleAdd}>Add Staff</Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Nursing Staff</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-muted-foreground">Loading...</p>
+          ) : (
+            <StaffTable staff={staff} onEdit={handleEdit} />
+          )}
+        </CardContent>
+      </Card>
+
+      <StaffFormDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setEditingStaff(null);
+        }}
+        initialData={
+          editingStaff
+            ? {
+                id: editingStaff.id,
+                firstName: editingStaff.firstName,
+                lastName: editingStaff.lastName,
+                email: editingStaff.email ?? "",
+                phone: editingStaff.phone ?? "",
+                role: editingStaff.role,
+                employmentType: editingStaff.employmentType,
+                fte: editingStaff.fte,
+                hireDate: editingStaff.hireDate,
+                icuCompetencyLevel: editingStaff.icuCompetencyLevel,
+                isChargeNurseQualified: editingStaff.isChargeNurseQualified,
+                reliabilityRating: editingStaff.reliabilityRating,
+                isActive: editingStaff.isActive,
+                notes: editingStaff.notes ?? "",
+              }
+            : undefined
+        }
+        onSave={handleSave}
+      />
+    </div>
+  );
+}
