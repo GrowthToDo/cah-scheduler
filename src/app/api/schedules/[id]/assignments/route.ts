@@ -20,6 +20,11 @@ export async function POST(
       isChargeNurse: body.isChargeNurse ?? false,
       isOvertime: body.isOvertime ?? false,
       assignmentSource: body.assignmentSource ?? "manual",
+      safeHarborInvoked: body.safeHarborInvoked ?? false,
+      safeHarborFormId: body.safeHarborFormId || null,
+      isFloat: body.isFloat ?? false,
+      floatFromUnit: body.floatFromUnit || null,
+      agencyReason: body.agencyReason || null,
       notes: body.notes || null,
     })
     .returning()

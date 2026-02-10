@@ -31,9 +31,22 @@ interface StaffFormData {
   icuCompetencyLevel: number;
   isChargeNurseQualified: boolean;
   reliabilityRating: number;
+  homeUnit: string;
+  crossTrainedUnits: string[];
+  weekendExempt: boolean;
   isActive: boolean;
   notes: string;
 }
+
+const COMPETENCY_DESCRIPTIONS: Record<number, string> = {
+  1: "Novice/Orientee - Requires preceptor",
+  2: "Advanced Beginner - No ICU/ER alone",
+  3: "Competent - Standard ICU/ER load",
+  4: "Proficient - Trauma Ready, TNCC",
+  5: "Expert - Charge/Preceptor qualified",
+};
+
+const UNITS = ["ICU", "ER", "Med-Surg", "PACU", "L&D"];
 
 const defaultData: StaffFormData = {
   firstName: "",
@@ -47,6 +60,9 @@ const defaultData: StaffFormData = {
   icuCompetencyLevel: 1,
   isChargeNurseQualified: false,
   reliabilityRating: 3,
+  homeUnit: "ICU",
+  crossTrainedUnits: [],
+  weekendExempt: false,
   isActive: true,
   notes: "",
 };
@@ -175,17 +191,61 @@ export function StaffFormDialog({
               />
             </div>
             <div>
-              <Label htmlFor="competency">ICU Competency (1-5)</Label>
-              <Input
-                id="competency"
-                type="number"
-                min="1"
-                max="5"
-                value={form.icuCompetencyLevel}
-                onChange={(e) =>
-                  setForm({ ...form, icuCompetencyLevel: parseInt(e.target.value) })
-                }
-              />
+              <Label>Home Unit</Label>
+              <Select
+                value={form.homeUnit || "ICU"}
+                onValueChange={(v) => setForm({ ...form, homeUnit: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {UNITS.map((unit) => (
+                    <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <Label>ICU Competency Level</Label>
+            <Select
+              value={form.icuCompetencyLevel.toString()}
+              onValueChange={(v) => setForm({ ...form, icuCompetencyLevel: parseInt(v) })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <SelectItem key={level} value={level.toString()}>
+                    Level {level}: {COMPETENCY_DESCRIPTIONS[level]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Cross-Trained Units</Label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {UNITS.filter((u) => u !== form.homeUnit).map((unit) => (
+                <label key={unit} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.crossTrainedUnits.includes(unit)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setForm({ ...form, crossTrainedUnits: [...form.crossTrainedUnits, unit] });
+                      } else {
+                        setForm({
+                          ...form,
+                          crossTrainedUnits: form.crossTrainedUnits.filter((u) => u !== unit),
+                        });
+                      }
+                    }}
+                    className="h-4 w-4"
+                  />
+                  {unit}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -203,7 +263,7 @@ export function StaffFormDialog({
                 }
               />
             </div>
-            <div className="flex items-end gap-4">
+            <div className="flex flex-col gap-2 pt-6">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -214,6 +274,17 @@ export function StaffFormDialog({
                   className="h-4 w-4"
                 />
                 <span className="text-sm">Charge Nurse Qualified</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.weekendExempt}
+                  onChange={(e) =>
+                    setForm({ ...form, weekendExempt: e.target.checked })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="text-sm">Weekend Exempt (Admin only)</span>
               </label>
             </div>
           </div>

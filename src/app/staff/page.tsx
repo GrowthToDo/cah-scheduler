@@ -20,6 +20,9 @@ interface StaffMember {
   isChargeNurseQualified: boolean;
   certifications: string[];
   reliabilityRating: number;
+  homeUnit: string | null;
+  crossTrainedUnits: string[];
+  weekendExempt: boolean;
   isActive: boolean;
   notes: string | null;
 }
@@ -120,6 +123,9 @@ export default function StaffPage() {
                 icuCompetencyLevel: editingStaff.icuCompetencyLevel,
                 isChargeNurseQualified: editingStaff.isChargeNurseQualified,
                 reliabilityRating: editingStaff.reliabilityRating,
+                homeUnit: editingStaff.homeUnit ?? "ICU",
+                crossTrainedUnits: editingStaff.crossTrainedUnits ?? [],
+                weekendExempt: editingStaff.weekendExempt ?? false,
                 isActive: editingStaff.isActive,
                 notes: editingStaff.notes ?? "",
               }

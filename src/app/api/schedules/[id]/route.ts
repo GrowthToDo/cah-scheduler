@@ -30,6 +30,9 @@ export async function GET(
       requiresChargeNurse: shift.requiresChargeNurse,
       actualCensus: shift.actualCensus,
       censusBandId: shift.censusBandId,
+      acuityLevel: shift.acuityLevel,
+      acuityExtraStaff: shift.acuityExtraStaff,
+      sitterCount: shift.sitterCount,
       notes: shift.notes,
       defName: shiftDefinition.name,
       defShiftType: shiftDefinition.shiftType,
@@ -38,6 +41,7 @@ export async function GET(
       defDurationHours: shiftDefinition.durationHours,
       defRequiredStaff: shiftDefinition.requiredStaffCount,
       defRequiresCharge: shiftDefinition.requiresChargeNurse,
+      defCountsTowardStaffing: shiftDefinition.countsTowardStaffing,
     })
     .from(shift)
     .innerJoin(shiftDefinition, eq(shift.shiftDefinitionId, shiftDefinition.id))
@@ -55,11 +59,16 @@ export async function GET(
       isChargeNurse: assignment.isChargeNurse,
       isOvertime: assignment.isOvertime,
       assignmentSource: assignment.assignmentSource,
+      safeHarborInvoked: assignment.safeHarborInvoked,
+      isFloat: assignment.isFloat,
+      floatFromUnit: assignment.floatFromUnit,
+      agencyReason: assignment.agencyReason,
       notes: assignment.notes,
       staffFirstName: staff.firstName,
       staffLastName: staff.lastName,
       staffRole: staff.role,
       staffCompetency: staff.icuCompetencyLevel,
+      staffHomeUnit: staff.homeUnit,
     })
     .from(assignment)
     .innerJoin(staff, eq(assignment.staffId, staff.id))
@@ -86,7 +95,11 @@ export async function GET(
     durationHours: s.defDurationHours,
     requiredStaffCount: s.requiredStaffCount ?? s.defRequiredStaff,
     requiresChargeNurse: s.requiresChargeNurse ?? s.defRequiresCharge,
+    countsTowardStaffing: s.defCountsTowardStaffing,
     actualCensus: s.actualCensus,
+    acuityLevel: s.acuityLevel,
+    acuityExtraStaff: s.acuityExtraStaff,
+    sitterCount: s.sitterCount,
     notes: s.notes,
     assignments: assignmentsByShift.get(s.id) ?? [],
   }));

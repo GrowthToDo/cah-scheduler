@@ -9,6 +9,79 @@ import {
 } from "drizzle-orm/sqlite-core";
 
 // ============================================================
+// UNIT CONFIGURATION
+// ============================================================
+export const unit = sqliteTable(
+  "unit",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    description: text("description"),
+    // Weekend fairness configuration
+    weekendRuleType: text("weekend_rule_type", {
+      enum: ["count_per_period", "alternate_weekends"],
+    })
+      .notNull()
+      .default("count_per_period"),
+    weekendShiftsRequired: integer("weekend_shifts_required").notNull().default(3), // per 6-week schedule
+    schedulePeriodWeeks: integer("schedule_period_weeks").notNull().default(6),
+    // Holiday fairness - similar to weekend
+    holidayShiftsRequired: integer("holiday_shifts_required").notNull().default(1), // per schedule period
+    // Escalation sequence for callouts (JSON array of sources in priority order)
+    escalationSequence: text("escalation_sequence", { mode: "json" })
+      .$type<string[]>()
+      .default(["float", "per_diem", "overtime", "agency"]),
+    // Acuity configuration - extra RNs/LPNs needed at each level
+    acuityYellowExtraStaff: integer("acuity_yellow_extra_staff").notNull().default(1),
+    acuityRedExtraStaff: integer("acuity_red_extra_staff").notNull().default(2),
+    // Low census policy - order of who to send home (JSON array)
+    lowCensusOrder: text("low_census_order", { mode: "json" })
+      .$type<string[]>()
+      .default(["agency", "overtime", "per_diem", "full_time"]),
+    // OT approval threshold (hours beyond which CNO approval needed)
+    otApprovalThreshold: integer("ot_approval_threshold").notNull().default(4),
+    // On-call limits
+    maxOnCallPerWeek: integer("max_on_call_per_week").notNull().default(1),
+    maxOnCallWeekendsPerMonth: integer("max_on_call_weekends_per_month").notNull().default(1),
+    // Consecutive weekend penalty threshold
+    maxConsecutiveWeekends: integer("max_consecutive_weekends").notNull().default(2),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [index("unit_name_idx").on(table.name)]
+);
+
+// ============================================================
+// PUBLIC HOLIDAYS
+// ============================================================
+export const publicHoliday = sqliteTable(
+  "public_holiday",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    year: integer("year").notNull(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("public_holiday_date_idx").on(table.date),
+    index("public_holiday_year_idx").on(table.year),
+  ]
+);
+
+// ============================================================
 // STAFF
 // ============================================================
 export const staff = sqliteTable(
@@ -27,17 +100,35 @@ export const staff = sqliteTable(
     }).notNull(),
     fte: real("fte").notNull().default(1.0),
     hireDate: text("hire_date").notNull(),
+    // ICU Competency Levels:
+    // 1 = Novice/Orientee: Cannot take patient alone, must be paired with preceptor (FTE contribution = 0)
+    // 2 = Advanced Beginner: Can take stable Med-Surg/Swing Bed, no ICU/ER alone
+    // 3 = Competent (Standard): Fully functional, can take standard ICU/ER load, ACLS/PALS certified
+    // 4 = Proficient (Trauma Ready): TNCC certified, can handle Codes/Trauma alone until backup
+    // 5 = Expert (Charge/Preceptor): Qualified to be Charge Nurse, can take sickest patients, manage unit
     icuCompetencyLevel: integer("icu_competency_level").notNull().default(1),
     isChargeNurseQualified: integer("is_charge_nurse_qualified", {
       mode: "boolean",
     })
       .notNull()
       .default(false),
+    // Certifications: ACLS, PALS, BLS, TNCC, specialty certs
     certifications: text("certifications", { mode: "json" })
       .$type<string[]>()
       .default([]),
     reliabilityRating: integer("reliability_rating").notNull().default(3),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    // Home unit and cross-training
+    homeUnit: text("home_unit").default("ICU"),
+    crossTrainedUnits: text("cross_trained_units", { mode: "json" })
+      .$type<string[]>()
+      .default([]),
+    // Weekend exemption - only Admin/CNO can set this (for HR accommodations)
+    weekendExempt: integer("weekend_exempt", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    // Flex hours year-to-date for low census rotation fairness
+    flexHoursYearToDate: real("flex_hours_year_to_date").notNull().default(0),
     notes: text("notes"),
     createdAt: text("created_at")
       .notNull()
@@ -50,6 +141,7 @@ export const staff = sqliteTable(
     index("staff_role_idx").on(table.role),
     index("staff_employment_type_idx").on(table.employmentType),
     index("staff_active_idx").on(table.isActive),
+    index("staff_home_unit_idx").on(table.homeUnit),
   ]
 );
 
@@ -74,15 +166,90 @@ export const staffPreferences = sqliteTable(
       .$type<string[]>()
       .default([]),
     preferredPattern: text("preferred_pattern"),
-    avoidWeekends: integer("avoid_weekends", { mode: "boolean" }).default(
-      false
-    ),
+    // Legacy field - kept for backwards compatibility but weekend fairness now handled by unit rules
+    avoidWeekends: integer("avoid_weekends", { mode: "boolean" }).default(false),
     notes: text("notes"),
     updatedAt: text("updated_at")
       .notNull()
       .default(sql`(datetime('now'))`),
   },
   (table) => [uniqueIndex("staff_preferences_staff_idx").on(table.staffId)]
+);
+
+// ============================================================
+// STAFF LEAVE
+// ============================================================
+export const staffLeave = sqliteTable(
+  "staff_leave",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    staffId: text("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    leaveType: text("leave_type", {
+      enum: ["vacation", "sick", "maternity", "medical", "personal", "bereavement", "other"],
+    }).notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    status: text("status", {
+      enum: ["pending", "approved", "denied"],
+    })
+      .notNull()
+      .default("pending"),
+    submittedAt: text("submitted_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    approvedAt: text("approved_at"),
+    approvedBy: text("approved_by"),
+    denialReason: text("denial_reason"),
+    reason: text("reason"),
+    notes: text("notes"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("staff_leave_staff_idx").on(table.staffId),
+    index("staff_leave_dates_idx").on(table.startDate, table.endDate),
+    index("staff_leave_status_idx").on(table.status),
+  ]
+);
+
+// ============================================================
+// PRN AVAILABILITY
+// ============================================================
+export const prnAvailability = sqliteTable(
+  "prn_availability",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    staffId: text("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    scheduleId: text("schedule_id")
+      .notNull()
+      .references(() => schedule.id, { onDelete: "cascade" }),
+    // Array of dates (YYYY-MM-DD) when the PRN staff is available
+    availableDates: text("available_dates", { mode: "json" })
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    submittedAt: text("submitted_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    notes: text("notes"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("prn_availability_staff_idx").on(table.staffId),
+    index("prn_availability_schedule_idx").on(table.scheduleId),
+    uniqueIndex("prn_availability_unique_idx").on(table.staffId, table.scheduleId),
+  ]
 );
 
 // ============================================================
@@ -94,16 +261,20 @@ export const shiftDefinition = sqliteTable("shift_definition", {
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   shiftType: text("shift_type", {
-    enum: ["day", "night", "evening"],
+    enum: ["day", "night", "evening", "on_call"],
   }).notNull(),
-  startTime: text("start_time").notNull(),
-  endTime: text("end_time").notNull(),
+  startTime: text("start_time").notNull(), // HH:MM format
+  endTime: text("end_time").notNull(), // HH:MM format
   durationHours: real("duration_hours").notNull(),
   unit: text("unit").notNull().default("ICU"),
   requiredStaffCount: integer("required_staff_count").notNull().default(2),
   requiresChargeNurse: integer("requires_charge_nurse", {
     mode: "boolean",
   })
+    .notNull()
+    .default(true),
+  // On-call shifts don't count toward regular staffing
+  countsTowardStaffing: integer("counts_toward_staffing", { mode: "boolean" })
     .notNull()
     .default(true),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
@@ -126,10 +297,12 @@ export const censusBand = sqliteTable(
     minPatients: integer("min_patients").notNull(),
     maxPatients: integer("max_patients").notNull(),
     requiredRNs: integer("required_rns").notNull(),
+    requiredLPNs: integer("required_lpns").notNull().default(0), // Added for Texas units
     requiredCNAs: integer("required_cnas").notNull().default(0),
     requiredChargeNurses: integer("required_charge_nurses")
       .notNull()
       .default(1),
+    // Patient to Licensed Staff ratio (RN + LPN, not just RN)
     patientToNurseRatio: text("patient_to_nurse_ratio")
       .notNull()
       .default("2:1"),
@@ -211,6 +384,7 @@ export const schedule = sqliteTable(
   (table) => [
     index("schedule_status_idx").on(table.status),
     index("schedule_dates_idx").on(table.startDate, table.endDate),
+    index("schedule_unit_idx").on(table.unit),
   ]
 );
 
@@ -236,6 +410,14 @@ export const shift = sqliteTable(
     }),
     actualCensus: integer("actual_census"),
     censusBandId: text("census_band_id").references(() => censusBand.id),
+    // Acuity level set by CNO/Manager
+    acuityLevel: text("acuity_level", {
+      enum: ["green", "yellow", "red"],
+    }),
+    // Extra staff needed due to acuity (calculated from unit config)
+    acuityExtraStaff: integer("acuity_extra_staff").default(0),
+    // Number of 1:1 sitters needed (adds to CNA requirement)
+    sitterCount: integer("sitter_count").default(0),
     notes: text("notes"),
     createdAt: text("created_at")
       .notNull()
@@ -271,7 +453,7 @@ export const assignment = sqliteTable(
       .notNull()
       .references(() => schedule.id, { onDelete: "cascade" }),
     status: text("status", {
-      enum: ["assigned", "confirmed", "called_out", "swapped", "cancelled"],
+      enum: ["assigned", "confirmed", "called_out", "swapped", "cancelled", "flexed"],
     })
       .notNull()
       .default("assigned"),
@@ -288,10 +470,26 @@ export const assignment = sqliteTable(
         "swap",
         "callout_replacement",
         "float",
+        "agency_manual", // When manager calls agency directly
+        "pull_back", // When pulled back from float assignment
       ],
     })
       .notNull()
       .default("manual"),
+    // For agency_manual assignments, track the reason
+    agencyReason: text("agency_reason", {
+      enum: ["callout", "acuity_spike", "vacancy"],
+    }),
+    // Safe Harbor (Texas law) - nurse accepts assignment under protest
+    safeHarborInvoked: integer("safe_harbor_invoked", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    safeHarborFormId: text("safe_harbor_form_id"),
+    // Track if this is a float assignment (staff working outside home unit)
+    isFloat: integer("is_float", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    floatFromUnit: text("float_from_unit"),
     notes: text("notes"),
     createdAt: text("created_at")
       .notNull()
@@ -305,6 +503,52 @@ export const assignment = sqliteTable(
     index("assignment_staff_idx").on(table.staffId),
     index("assignment_schedule_idx").on(table.scheduleId),
     uniqueIndex("assignment_unique_idx").on(table.shiftId, table.staffId),
+  ]
+);
+
+// ============================================================
+// SHIFT SWAP REQUEST
+// ============================================================
+export const shiftSwapRequest = sqliteTable(
+  "shift_swap_request",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // The assignment the requesting staff wants to give up
+    requestingAssignmentId: text("requesting_assignment_id")
+      .notNull()
+      .references(() => assignment.id),
+    requestingStaffId: text("requesting_staff_id")
+      .notNull()
+      .references(() => staff.id),
+    // The assignment being offered in exchange (optional - can be open request)
+    targetAssignmentId: text("target_assignment_id")
+      .references(() => assignment.id),
+    targetStaffId: text("target_staff_id")
+      .references(() => staff.id),
+    status: text("status", {
+      enum: ["pending", "approved", "denied", "cancelled"],
+    })
+      .notNull()
+      .default("pending"),
+    requestedAt: text("requested_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    reviewedAt: text("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
+    denialReason: text("denial_reason"),
+    // Validation results at time of request
+    validationNotes: text("validation_notes"),
+    notes: text("notes"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("swap_request_requesting_staff_idx").on(table.requestingStaffId),
+    index("swap_request_target_staff_idx").on(table.targetStaffId),
+    index("swap_request_status_idx").on(table.status),
   ]
 );
 
@@ -447,6 +691,10 @@ export const exceptionLog = sqliteTable(
         "rule",
         "staff",
         "scenario",
+        "leave",
+        "swap_request",
+        "unit",
+        "shift",
       ],
     }).notNull(),
     entityId: text("entity_id").notNull(),
@@ -465,8 +713,17 @@ export const exceptionLog = sqliteTable(
         "scenario_rejected",
         "swap_requested",
         "swap_approved",
+        "swap_denied",
         "forced_overtime",
         "manual_assignment",
+        "leave_requested",
+        "leave_approved",
+        "leave_denied",
+        "pull_back",
+        "flex_home",
+        "safe_harbor",
+        "acuity_changed",
+        "agency_called",
       ],
     }).notNull(),
     description: text("description").notNull(),

@@ -7,8 +7,13 @@ import {
   assignment,
   rule,
   censusBand,
+  unit,
+  prnAvailability,
+  staffLeave,
+  publicHoliday,
+  schedule,
 } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { getEvaluator } from "./rules";
 import type {
   RuleContext,
@@ -17,9 +22,47 @@ import type {
   StaffInfo,
   ShiftInfo,
   CensusBandInfo,
+  UnitConfig,
+  PRNAvailabilityInfo,
+  StaffLeaveInfo,
+  PublicHolidayInfo,
 } from "./rules/types";
 
 export function buildContext(scheduleId: string): RuleContext {
+  // Fetch the schedule to get unit and date range
+  const scheduleRecord = db
+    .select()
+    .from(schedule)
+    .where(eq(schedule.id, scheduleId))
+    .get();
+
+  const scheduleUnit = scheduleRecord?.unit ?? "ICU";
+  const scheduleStartDate = scheduleRecord?.startDate ?? "";
+  const scheduleEndDate = scheduleRecord?.endDate ?? "";
+
+  // Fetch unit configuration
+  const unitRecord = db
+    .select()
+    .from(unit)
+    .where(and(eq(unit.name, scheduleUnit), eq(unit.isActive, true)))
+    .get();
+
+  const unitConfig: UnitConfig | null = unitRecord
+    ? {
+        id: unitRecord.id,
+        name: unitRecord.name,
+        weekendRuleType: unitRecord.weekendRuleType as "count_per_period" | "alternate_weekends",
+        weekendShiftsRequired: unitRecord.weekendShiftsRequired,
+        schedulePeriodWeeks: unitRecord.schedulePeriodWeeks,
+        holidayShiftsRequired: unitRecord.holidayShiftsRequired,
+        maxOnCallPerWeek: unitRecord.maxOnCallPerWeek,
+        maxOnCallWeekendsPerMonth: unitRecord.maxOnCallWeekendsPerMonth,
+        maxConsecutiveWeekends: unitRecord.maxConsecutiveWeekends,
+        acuityYellowExtraStaff: unitRecord.acuityYellowExtraStaff,
+        acuityRedExtraStaff: unitRecord.acuityRedExtraStaff,
+      }
+    : null;
+
   // Fetch all assignments for this schedule
   const assignments = db
     .select({
@@ -28,6 +71,8 @@ export function buildContext(scheduleId: string): RuleContext {
       staffId: assignment.staffId,
       isChargeNurse: assignment.isChargeNurse,
       isOvertime: assignment.isOvertime,
+      isFloat: assignment.isFloat,
+      floatFromUnit: assignment.floatFromUnit,
       shiftDate: shift.date,
       shiftDefId: shift.shiftDefinitionId,
     })
@@ -62,6 +107,11 @@ export function buildContext(scheduleId: string): RuleContext {
       requiredStaffCount: s.requiredStaffCount ?? def.requiredStaffCount,
       requiresChargeNurse: s.requiresChargeNurse ?? def.requiresChargeNurse,
       actualCensus: s.actualCensus,
+      unit: def.unit,
+      countsTowardStaffing: def.countsTowardStaffing,
+      acuityLevel: s.acuityLevel,
+      acuityExtraStaff: s.acuityExtraStaff ?? 0,
+      sitterCount: s.sitterCount ?? 0,
     });
   }
 
@@ -74,11 +124,14 @@ export function buildContext(scheduleId: string): RuleContext {
       staffId: a.staffId,
       isChargeNurse: a.isChargeNurse,
       isOvertime: a.isOvertime,
+      isFloat: a.isFloat,
+      floatFromUnit: a.floatFromUnit,
       date: a.shiftDate,
       shiftType: shiftInfo?.shiftType ?? "",
       startTime: shiftInfo?.startTime ?? "",
       endTime: shiftInfo?.endTime ?? "",
       durationHours: shiftInfo?.durationHours ?? 0,
+      unit: shiftInfo?.unit ?? scheduleUnit,
     };
   });
 
@@ -101,6 +154,10 @@ export function buildContext(scheduleId: string): RuleContext {
       certifications: (s.certifications as string[]) ?? [],
       fte: s.fte,
       reliabilityRating: s.reliabilityRating,
+      homeUnit: s.homeUnit,
+      crossTrainedUnits: (s.crossTrainedUnits as string[]) ?? [],
+      weekendExempt: s.weekendExempt,
+      isActive: s.isActive,
       preferences: pref
         ? {
             preferredShift: pref.preferredShift ?? "any",
@@ -120,9 +177,53 @@ export function buildContext(scheduleId: string): RuleContext {
     minPatients: b.minPatients,
     maxPatients: b.maxPatients,
     requiredRNs: b.requiredRNs,
+    requiredLPNs: b.requiredLPNs,
     requiredCNAs: b.requiredCNAs,
     requiredChargeNurses: b.requiredChargeNurses,
     patientToNurseRatio: b.patientToNurseRatio,
+  }));
+
+  // Fetch PRN availability for this schedule
+  const prnAvailabilityRecords = db
+    .select()
+    .from(prnAvailability)
+    .where(eq(prnAvailability.scheduleId, scheduleId))
+    .all();
+
+  const prnAvailabilityInfos: PRNAvailabilityInfo[] = prnAvailabilityRecords.map((p) => ({
+    staffId: p.staffId,
+    availableDates: (p.availableDates as string[]) ?? [],
+  }));
+
+  // Fetch approved staff leaves that overlap with schedule dates
+  const staffLeaveRecords = db
+    .select()
+    .from(staffLeave)
+    .where(eq(staffLeave.status, "approved"))
+    .all()
+    .filter((l) => {
+      // Check if leave overlaps with schedule
+      return l.startDate <= scheduleEndDate && l.endDate >= scheduleStartDate;
+    });
+
+  const staffLeaveInfos: StaffLeaveInfo[] = staffLeaveRecords.map((l) => ({
+    staffId: l.staffId,
+    startDate: l.startDate,
+    endDate: l.endDate,
+    status: l.status,
+  }));
+
+  // Fetch public holidays within schedule range
+  const publicHolidayRecords = db
+    .select()
+    .from(publicHoliday)
+    .where(eq(publicHoliday.isActive, true))
+    .all()
+    .filter((h) => h.date >= scheduleStartDate && h.date <= scheduleEndDate);
+
+  const publicHolidayInfos: PublicHolidayInfo[] = publicHolidayRecords.map((h) => ({
+    date: h.date,
+    name: h.name,
   }));
 
   return {
@@ -130,6 +231,13 @@ export function buildContext(scheduleId: string): RuleContext {
     staffMap,
     shiftMap,
     censusBands: censusBandInfos,
+    unitConfig,
+    prnAvailability: prnAvailabilityInfos,
+    staffLeaves: staffLeaveInfos,
+    publicHolidays: publicHolidayInfos,
+    scheduleStartDate,
+    scheduleEndDate,
+    scheduleUnit,
     ruleParameters: {},
   };
 }

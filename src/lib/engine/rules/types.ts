@@ -17,11 +17,14 @@ export interface AssignmentInfo {
   staffId: string;
   isChargeNurse: boolean;
   isOvertime: boolean;
+  isFloat: boolean;
+  floatFromUnit: string | null;
   date: string;
   shiftType: string;
   startTime: string;
   endTime: string;
   durationHours: number;
+  unit: string;
 }
 
 export interface StaffInfo {
@@ -35,6 +38,10 @@ export interface StaffInfo {
   certifications: string[];
   fte: number;
   reliabilityRating: number;
+  homeUnit: string | null;
+  crossTrainedUnits: string[];
+  weekendExempt: boolean;
+  isActive: boolean;
   preferences: {
     preferredShift: string;
     maxHoursPerWeek: number;
@@ -54,6 +61,11 @@ export interface ShiftInfo {
   requiredStaffCount: number;
   requiresChargeNurse: boolean;
   actualCensus: number | null;
+  unit: string;
+  countsTowardStaffing: boolean;
+  acuityLevel: string | null;
+  acuityExtraStaff: number;
+  sitterCount: number;
 }
 
 export interface CensusBandInfo {
@@ -61,9 +73,41 @@ export interface CensusBandInfo {
   minPatients: number;
   maxPatients: number;
   requiredRNs: number;
+  requiredLPNs: number;
   requiredCNAs: number;
   requiredChargeNurses: number;
   patientToNurseRatio: string;
+}
+
+export interface UnitConfig {
+  id: string;
+  name: string;
+  weekendRuleType: "count_per_period" | "alternate_weekends";
+  weekendShiftsRequired: number;
+  schedulePeriodWeeks: number;
+  holidayShiftsRequired: number;
+  maxOnCallPerWeek: number;
+  maxOnCallWeekendsPerMonth: number;
+  maxConsecutiveWeekends: number;
+  acuityYellowExtraStaff: number;
+  acuityRedExtraStaff: number;
+}
+
+export interface PRNAvailabilityInfo {
+  staffId: string;
+  availableDates: string[];
+}
+
+export interface StaffLeaveInfo {
+  staffId: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+}
+
+export interface PublicHolidayInfo {
+  date: string;
+  name: string;
 }
 
 export interface RuleContext {
@@ -71,6 +115,13 @@ export interface RuleContext {
   staffMap: Map<string, StaffInfo>;
   shiftMap: Map<string, ShiftInfo>;
   censusBands: CensusBandInfo[];
+  unitConfig: UnitConfig | null;
+  prnAvailability: PRNAvailabilityInfo[];
+  staffLeaves: StaffLeaveInfo[];
+  publicHolidays: PublicHolidayInfo[];
+  scheduleStartDate: string;
+  scheduleEndDate: string;
+  scheduleUnit: string;
   ruleParameters: Record<string, unknown>;
 }
 

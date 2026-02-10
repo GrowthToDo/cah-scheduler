@@ -31,6 +31,10 @@ export async function POST(request: Request) {
       isChargeNurseQualified: body.isChargeNurseQualified ?? false,
       certifications: body.certifications ?? [],
       reliabilityRating: body.reliabilityRating ?? 3,
+      homeUnit: body.homeUnit || null,
+      crossTrainedUnits: body.crossTrainedUnits ?? [],
+      weekendExempt: body.weekendExempt ?? false,
+      flexHoursYearToDate: body.flexHoursYearToDate ?? 0,
       notes: body.notes || null,
     })
     .returning()
