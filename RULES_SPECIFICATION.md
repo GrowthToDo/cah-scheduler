@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.0
-**Last Updated:** February 2026
+**Document Version:** 1.1
+**Last Updated:** February 13, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -15,6 +15,9 @@
 6. [Census Bands & Staffing](#6-census-bands--staffing)
 7. [Escalation & Callout Workflow](#7-escalation--callout-workflow)
 8. [Low Census Policy](#8-low-census-policy)
+9. [Assignment Attributes](#9-assignment-attributes)
+10. [Special Features](#10-special-features)
+11. [Application UI Guide](#11-application-ui-guide)
 
 ---
 
@@ -336,18 +339,92 @@ Each assignment (staff → shift) tracks:
 
 ---
 
+## 11. Application UI Guide
+
+The CAH Scheduler application provides the following pages for managing scheduling:
+
+### 11.1 Main Pages
+
+| Page | URL | Description |
+|------|-----|-------------|
+| **Dashboard** | `/dashboard` | Overview of current schedule status, pending items, and key metrics |
+| **Staff** | `/staff` | Manage all staff members - add, edit, view competency levels, employment types, certifications |
+| **Schedule** | `/schedule` | View and edit the schedule grid, make assignments, see coverage |
+| **Scenarios** | `/scenarios` | Compare different scheduling scenarios and their scores |
+| **Callouts** | `/callouts` | Log and manage staff callouts, track replacements and escalation |
+| **Audit Trail** | `/audit` | View all changes made to the system with timestamps and details |
+
+### 11.2 Request Management Pages
+
+| Page | URL | Description |
+|------|-----|-------------|
+| **Leave Management** | `/leave` | View, approve, or deny leave requests (vacation, sick, maternity, etc.). Create new leave requests for staff. Filter by status: All, Pending, Approved, Denied. |
+| **Shift Swaps** | `/swaps` | View, approve, or deny shift swap requests between staff. Shows requesting staff, their shift, target staff, and target shift. |
+| **PRN Availability** | `/availability` | View per-diem (PRN) staff availability submissions. See which dates each PRN staff is available. Highlights staff who haven't submitted availability yet. |
+
+### 11.3 Configuration Pages
+
+| Page | URL | Description |
+|------|-----|-------------|
+| **Rules** | `/rules` | View and configure scheduling rules (hard rules and soft rules with penalties) |
+| **Unit Configuration** | `/settings/units` | Configure per-unit settings including: weekend shift requirements, holiday requirements, callout escalation order, low census order, acuity staffing levels, OT approval thresholds, on-call limits |
+| **Holidays** | `/settings/holidays` | Manage public holidays that affect scheduling. Add standard US holidays with one click. Holidays affect fairness calculations. |
+
+### 11.4 Navigation
+
+All pages are accessible from the left sidebar. The navigation order is:
+1. Dashboard
+2. Staff
+3. Schedule
+4. Scenarios
+5. Callouts
+6. Leave
+7. Shift Swaps
+8. PRN Availability
+9. Rules
+10. Units
+11. Holidays
+12. Audit Trail
+
+### 11.5 Common Actions
+
+| Action | Where | How |
+|--------|-------|-----|
+| **Approve/Deny Leave** | `/leave` | Click "Approve" or "Deny" button on pending requests |
+| **Approve/Deny Swap** | `/swaps` | Click "Approve" or "Deny" button on pending swap requests |
+| **Create Leave Request** | `/leave` | Click "New Leave Request" button, fill form |
+| **View PRN Availability** | `/availability` | See calendar of available dates per PRN staff |
+| **Configure Unit Rules** | `/settings/units` | Click "Edit" on a unit to modify its scheduling rules |
+| **Add Holidays** | `/settings/holidays` | Click "Add Standard Holidays" for US holidays or "Add Holiday" for custom |
+| **Log Callout** | `/callouts` | Click "Log Callout" and follow escalation workflow |
+| **View Audit History** | `/audit` | Filter by action type, date range, or entity |
+
+---
+
 ## Review Checklist
 
 Please review each section and note any changes needed:
 
-- [ ] Section 1: Staff Attributes - Any changes?
-- [ ] Section 2: Shift Types - Any changes?
-- [ ] Section 3: Hard Rules - Any rules to add/remove/modify?
+- [ ] Section 1: Staff Attributes - Any changes to roles, employment types, or competency levels?
+- [ ] Section 2: Shift Types - Any changes to shift definitions or acuity levels?
+- [ ] Section 3: Hard Rules - Any rules to add/remove/modify? Are all 13 rules correct?
 - [ ] Section 4: Soft Rules - Any rules to add/remove/modify? Penalty weights correct?
 - [ ] Section 5: Unit Configuration - Any settings to add/change defaults?
-- [ ] Section 6: Census Bands - Staffing ratios correct?
-- [ ] Section 7: Escalation Workflow - Sequence correct?
-- [ ] Section 8: Low Census Policy - Order correct?
+- [ ] Section 6: Census Bands - Staffing ratios correct for your units?
+- [ ] Section 7: Escalation Workflow - Callout escalation sequence correct?
+- [ ] Section 8: Low Census Policy - Order for sending staff home correct?
+- [ ] Section 9: Assignment Attributes - Any additional tracking needed?
+- [ ] Section 10: Special Features - Any features missing?
+- [ ] Section 11: UI Guide - Any additional pages or features needed?
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0 | Feb 2026 | Initial document with all rules and configuration options |
+| 1.1 | Feb 13, 2026 | Added Section 11 (Application UI Guide) documenting all available pages: Leave Management, Shift Swaps, PRN Availability, Unit Configuration, and Holidays Management |
 
 ---
 
