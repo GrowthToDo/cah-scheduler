@@ -38,10 +38,27 @@ interface UnitConfig {
   isActive: boolean;
 }
 
-const defaultForm = {
+interface FormState {
+  name: string;
+  description: string;
+  weekendRuleType: "count_per_period" | "alternate_weekends";
+  weekendShiftsRequired: number;
+  schedulePeriodWeeks: number;
+  holidayShiftsRequired: number;
+  escalationSequence: string[];
+  acuityYellowExtraStaff: number;
+  acuityRedExtraStaff: number;
+  lowCensusOrder: string[];
+  otApprovalThreshold: number;
+  maxOnCallPerWeek: number;
+  maxOnCallWeekendsPerMonth: number;
+  maxConsecutiveWeekends: number;
+}
+
+const defaultForm: FormState = {
   name: "",
   description: "",
-  weekendRuleType: "count_per_period" as const,
+  weekendRuleType: "count_per_period",
   weekendShiftsRequired: 3,
   schedulePeriodWeeks: 6,
   holidayShiftsRequired: 1,
@@ -60,7 +77,7 @@ export default function UnitsPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<UnitConfig | null>(null);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState<FormState>(defaultForm);
 
   const fetchData = useCallback(async () => {
     const res = await fetch("/api/units");
