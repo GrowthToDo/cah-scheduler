@@ -1,0 +1,448 @@
+# Using the Application
+
+[← Back to Index](./README.md) | [← Previous: Configuration](./08-configuration.md) | [Next: Glossary →](./10-glossary.md)
+
+---
+
+## Application Overview
+
+The CAH Scheduler is a web application. You access it through a browser (Chrome, Safari, Firefox, etc.).
+
+**Main navigation:** A sidebar on the left shows all available pages.
+
+---
+
+## Pages Reference
+
+Here's every page in the application and what you can do on each.
+
+---
+
+## Dashboard (`/dashboard`)
+
+**Purpose:** Your home base. Quick overview of what's happening.
+
+### What You'll See
+
+- **Schedule Summary** - Current schedule status (draft/published)
+- **Coverage Alerts** - Shifts that need attention
+- **Pending Items** - Leave requests, swaps waiting for approval
+- **Quick Stats** - Staff count, upcoming shifts, etc.
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| See today's coverage | Check the "Today" section |
+| Review pending requests | Look at "Pending Items" |
+| Jump to a problem | Click any alert to go to details |
+
+---
+
+## Staff (`/staff`)
+
+**Purpose:** Manage all staff members in the system.
+
+### What You'll See
+
+- **Staff List** - Everyone in the system
+- **Key Info** - Name, role, employment type, competency
+- **Status** - Active/inactive
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| View all staff | Just open the page |
+| Find a specific person | Use search/filter |
+| Add new staff | Click "Add Staff" button |
+| Edit staff info | Click on a staff member, then "Edit" |
+| Deactivate staff | Edit and set "Active" to No |
+| View certifications | Click into staff detail view |
+
+### Adding New Staff
+
+Required information:
+1. First name, Last name
+2. Role (RN, LPN, CNA)
+3. Employment type (Full-time, Part-time, PRN, etc.)
+4. Home unit
+5. Competency level
+6. FTE (for non-PRN)
+
+---
+
+## Schedule (`/schedule`)
+
+**Purpose:** View and edit the schedule.
+
+### What You'll See
+
+- **Calendar Grid** - Days across the top, shifts down the side
+- **Assignments** - Who's working each shift
+- **Coverage Indicators** - Green (good), Yellow (warning), Red (problem)
+- **Schedule Status** - Draft or Published
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| View a day's coverage | Click on the day |
+| See who's working a shift | Click on the shift |
+| Add an assignment | Click empty slot, select staff |
+| Remove an assignment | Click assignment, select "Remove" |
+| Publish schedule | Click "Publish" button |
+
+### Schedule Workflow
+
+```
+1. Create new schedule (set date range)
+        ↓
+2. Generate initial assignments (auto or manual)
+        ↓
+3. Review and adjust
+        ↓
+4. Validate (check for rule violations)
+        ↓
+5. Publish (make visible to staff)
+```
+
+---
+
+## Scenarios (`/scenarios`)
+
+**Purpose:** Compare different scheduling options.
+
+### What Is a Scenario?
+
+When creating a schedule, you might generate multiple options:
+- Scenario A: Minimizes overtime
+- Scenario B: Honors more preferences
+- Scenario C: Maximum coverage
+
+### What You'll See
+
+- **Scenario List** - Each option with scores
+- **Score Breakdown** - Coverage, fairness, cost, etc.
+- **Violations** - Any rule violations per scenario
+- **Status** - Draft, Selected, Rejected
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| Compare scenarios | View scores side-by-side |
+| See violations | Click into scenario detail |
+| Select a scenario | Click "Select" on the best one |
+| Reject a scenario | Click "Reject" |
+
+---
+
+## Callouts (`/callouts`)
+
+**Purpose:** Log and manage staff callouts.
+
+### What You'll See
+
+- **Callout List** - All recorded callouts
+- **Status** - Open, Filled, Unfilled Approved
+- **Details** - Who, when, why, replacement
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| Log a new callout | Click "Log Callout" |
+| Find replacement | Use escalation workflow |
+| Mark as filled | Assign replacement staff |
+| Close without fill | Mark "Unfilled Approved" with justification |
+
+### Logging a Callout
+
+1. Click "Log Callout"
+2. Select the staff member
+3. Select the shift they're missing
+4. Select the reason (sick, emergency, etc.)
+5. Save
+6. Follow escalation to find replacement
+
+---
+
+## Leave Management (`/leave`)
+
+**Purpose:** Handle time-off requests.
+
+### What You'll See
+
+- **Request List** - All leave requests
+- **Status Filters** - All, Pending, Approved, Denied
+- **Request Details** - Who, dates, type, status
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| See pending requests | Click "Pending" filter |
+| Approve a request | Click "Approve" button |
+| Deny a request | Click "Deny" button |
+| Create request for staff | Click "New Leave Request" |
+
+### Approving/Denying
+
+**Before approving, consider:**
+- Is coverage available for those dates?
+- How many others are already off?
+- Is this a blackout period?
+
+**When denying:**
+- Provide a reason (staff will see it)
+- Be consistent in your criteria
+
+---
+
+## Shift Swaps (`/swaps`)
+
+**Purpose:** Manage shift trade requests between staff.
+
+### What You'll See
+
+- **Swap List** - All swap requests
+- **Parties** - Who wants to swap with whom
+- **Shifts** - Which shifts are being traded
+- **Status** - Pending, Approved, Denied
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| See pending swaps | Click "Pending" filter |
+| Approve a swap | Click "Approve" |
+| Deny a swap | Click "Deny" |
+
+### Before Approving
+
+The system should validate:
+- Both parties are qualified for each other's shifts
+- No rule violations created
+- Coverage remains adequate
+
+Review these checks before approving!
+
+---
+
+## PRN Availability (`/availability`)
+
+**Purpose:** See when PRN staff can work.
+
+### What You'll See
+
+- **Staff List** - PRN staff members
+- **Submission Status** - Who has/hasn't submitted
+- **Availability Calendar** - Dates each person is available
+- **Missing Alert** - Staff who need to submit
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| See who hasn't submitted | Check "Missing Submissions" card |
+| View someone's availability | Click on their row |
+| See availability calendar | Scroll to calendar section |
+
+### Using This Information
+
+- Only schedule PRN on dates they marked available
+- Identify gaps where no PRN is available
+- Follow up with staff who haven't submitted
+
+---
+
+## Rules (`/rules`)
+
+**Purpose:** View and configure scheduling rules.
+
+### What You'll See
+
+- **Rule List** - All hard and soft rules
+- **Type Badge** - Hard vs Soft
+- **Category** - Staffing, Rest, Fairness, etc.
+- **Status** - Active/Inactive
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| View all rules | Open the page |
+| See rule details | Click on a rule |
+| Toggle rule on/off | Use active toggle |
+| Adjust parameters | Edit the rule |
+
+---
+
+## Unit Configuration (`/settings/units`)
+
+**Purpose:** Configure scheduling rules per unit.
+
+### What You'll See
+
+- **Unit Cards** - Each unit with its settings
+- **Settings Summary** - Key values at a glance
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| Add a unit | Click "Add Unit" |
+| Edit unit settings | Click "Edit" on the unit card |
+| Delete a unit | Click "Delete" (careful!) |
+
+### What You Can Configure
+
+- Weekend shift requirements
+- Holiday requirements
+- Callout escalation order
+- Low census order
+- Acuity staffing levels
+- On-call limits
+- OT thresholds
+
+---
+
+## Holidays (`/settings/holidays`)
+
+**Purpose:** Manage public holidays.
+
+### What You'll See
+
+- **Year Selector** - Switch between years
+- **Holiday Table** - Each holiday with date and day of week
+- **Weekend Badge** - Shows if holiday falls on weekend
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| Add US holidays | Click "Add Standard Holidays" |
+| Add custom holiday | Click "Add Holiday" |
+| Edit a holiday | Click "Edit" |
+| Delete a holiday | Click "Delete" |
+| Change year | Click year buttons |
+
+---
+
+## Audit Trail (`/audit`)
+
+**Purpose:** See complete history of all changes.
+
+### What You'll See
+
+- **Event List** - Every action taken in the system
+- **Details** - Who, what, when
+- **Entity** - What was affected (assignment, rule, etc.)
+- **Action** - What happened (created, updated, etc.)
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| Find a specific change | Use filters |
+| See who made a change | Check "Performed By" column |
+| View change details | Click on an entry |
+
+### Why Use Audit Trail?
+
+- **Compliance** - Prove you followed procedures
+- **Troubleshooting** - "What happened to Maria's shift?"
+- **Accountability** - Track who made decisions
+- **Disputes** - "I was scheduled for X, not Y"
+
+---
+
+## Common Workflows
+
+### Publishing a New Schedule
+
+```
+1. Go to Schedule page
+2. Create new schedule (set dates)
+3. Generate assignments (or build manually)
+4. Go to Scenarios, review options
+5. Select best scenario
+6. Return to Schedule, click "Publish"
+```
+
+### Handling a Same-Day Callout
+
+```
+1. Get the call: "I can't come in"
+2. Go to Callouts page
+3. Click "Log Callout"
+4. Fill in details
+5. Save
+6. Follow escalation suggestions
+7. Assign replacement
+8. Mark as "Filled"
+```
+
+### Approving Leave Requests
+
+```
+1. Go to Leave page
+2. Filter by "Pending"
+3. For each request:
+   - Check calendar for coverage
+   - Consider other requests same period
+   - Approve or Deny
+   - Add notes if denying
+```
+
+---
+
+## Tips & Best Practices
+
+### Daily
+- Check Dashboard for alerts
+- Review any pending callouts
+- Monitor today's coverage
+
+### Weekly
+- Process pending leave requests
+- Process pending swap requests
+- Review schedule for next week
+
+### Before Each Schedule Period
+- Collect PRN availability
+- Process vacation requests
+- Build/generate the schedule
+- Review scenarios
+- Publish
+
+### Monthly
+- Review callout patterns
+- Check fairness metrics (weekend/holiday distribution)
+- Adjust configuration if needed
+
+---
+
+## Summary
+
+The application is organized around your workflow:
+
+1. **Dashboard** - Your starting point
+2. **Staff** - Who you're scheduling
+3. **Schedule** - The main event
+4. **Scenarios** - Options comparison
+5. **Callouts** - Handle absences
+6. **Leave** - Time-off requests
+7. **Swaps** - Shift trades
+8. **Availability** - PRN scheduling
+9. **Rules** - Scheduling constraints
+10. **Units** - Department configuration
+11. **Holidays** - Special days
+12. **Audit** - Change history
+
+Navigate using the sidebar, and you'll find what you need!
+
+---
+
+[Next: Glossary →](./10-glossary.md)
