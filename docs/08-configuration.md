@@ -48,7 +48,8 @@ Each unit may have different rules:
 | **Escalation Sequence** | Callout coverage order | Float → PRN → OT → Agency |
 | **Acuity Yellow Extra Staff** | Extra staff at Yellow acuity | +1 |
 | **Acuity Red Extra Staff** | Extra staff at Red acuity | +2 |
-| **Low Census Order** | Who goes home first in low census | Agency → OT → PRN → Full-Time |
+| **Low Census Order** | Who goes home first in low census | Voluntary → OT → PRN → Full-Time |
+| **Callout Threshold Days** | Days before shift to classify as callout vs open shift | 7 days |
 | **OT Approval Threshold** | Hours requiring CNO approval | 4 hours |
 | **Max On-Call Per Week** | On-call shift limit | 1 per week |
 | **Max On-Call Weekends Per Month** | Weekend on-call limit | 1 per month |
@@ -81,13 +82,26 @@ You might change it to:
 When census drops and you need to send people home:
 
 ```
-Default: Agency → Overtime → Per Diem → Full-Time
+Default: Voluntary → Overtime → Per Diem → Full-Time
 
 Meaning:
-1. First, send home agency staff (most expensive)
-2. Then, staff on overtime
+1. First, send home VTO staff (they volunteered)
+2. Then, staff on overtime (expensive)
 3. Then, per diem staff
 4. Finally, full-time staff (only if necessary)
+```
+
+**Note:** Agency is NOT in the low census order because agency contracts typically guarantee minimum hours - sending them home doesn't save money.
+
+### Callout Threshold Days
+
+This setting determines when leave-related coverage needs become "callouts" vs "open shifts":
+
+```
+Default: 7 days
+
+If leave is approved and shift is within 7 days → Creates Callout (urgent)
+If leave is approved and shift is beyond 7 days → Creates Open Shift (for pickup)
 ```
 
 ---

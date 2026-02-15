@@ -24,6 +24,7 @@ interface Staff {
   homeUnit: string | null;
   crossTrainedUnits: string[];
   weekendExempt: boolean;
+  voluntaryFlexAvailable: boolean;
   isActive: boolean;
 }
 
@@ -38,9 +39,11 @@ const employmentLabels: Record<string, string> = {
 export function StaffTable({
   staff,
   onEdit,
+  onNameClick,
 }: {
   staff: Staff[];
   onEdit: (id: string) => void;
+  onNameClick?: (staff: Staff) => void;
 }) {
   return (
     <Table>
@@ -61,7 +64,16 @@ export function StaffTable({
         {staff.map((s) => (
           <TableRow key={s.id}>
             <TableCell className="font-medium">
-              {s.firstName} {s.lastName}
+              {onNameClick ? (
+                <button
+                  onClick={() => onNameClick(s)}
+                  className="text-left hover:text-primary hover:underline"
+                >
+                  {s.firstName} {s.lastName}
+                </button>
+              ) : (
+                <span>{s.firstName} {s.lastName}</span>
+              )}
             </TableCell>
             <TableCell>
               <Badge variant={s.role === "RN" ? "default" : s.role === "LPN" ? "outline" : "secondary"}>
@@ -111,6 +123,9 @@ export function StaffTable({
                 </Badge>
                 {s.weekendExempt && (
                   <Badge variant="outline" className="text-xs">WE Exempt</Badge>
+                )}
+                {s.voluntaryFlexAvailable && (
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">VTO</Badge>
                 )}
               </div>
             </TableCell>

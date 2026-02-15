@@ -218,12 +218,23 @@ These are **preferences**. The scheduler tries to satisfy them but can break the
 
 ### 4. Holiday Fairness
 
-**What it means:** Holiday shifts should be distributed evenly.
+**What it means:** Holiday shifts should be distributed evenly **across the year** (not per schedule period).
 
 **How it works:**
-- Everyone should work roughly the same number of holidays
-- If you worked Thanksgiving, maybe you get Christmas off
-- Track history over time for multi-year fairness
+- System tracks holiday assignments in the `staff_holiday_assignment` table
+- Compares each person's yearly total against the average
+- Staff below average get priority for non-holiday assignments
+- Staff above average may be assigned holidays to balance out
+
+**Christmas Grouping:**
+Christmas Eve and Christmas Day count as ONE "Christmas" holiday:
+- Working Christmas Eve = "worked Christmas"
+- Working Christmas Day = "worked Christmas"
+- Working both still counts as just ONE holiday
+
+**Why annual tracking?**
+> Per-period tracking was unfair: someone who worked Thanksgiving in Period 1 might also get assigned Christmas in Period 2, while others worked zero holidays.
+> Annual tracking ensures year-round fairness.
 
 ### 5. Staff Preferences
 

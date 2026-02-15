@@ -164,6 +164,9 @@ When staff doesn't appear for their shift and doesn't call in advance.
 ### On-Call
 A type of shift where staff isn't at the hospital but must be available to come in if needed.
 
+### Open Shift
+A shift that needs coverage, created when leave is approved in advance. Less urgent than a callout. Staff can view and claim open shifts on the Open Shifts page.
+
 ### Orientee
 A new hire still in training. Level 1 competency. Needs supervision.
 
@@ -246,6 +249,13 @@ A certification for handling trauma patients. Required for Level 4 competency.
 
 ### Unit
 A distinct area of the hospital with specific patients and staff. Example: ICU, ER, Med-Surg.
+
+---
+
+## V
+
+### VTO (Voluntary Time Off)
+When staff volunteers to go home during low census. Staff can indicate "Available for VTO" in their profile. These staff are sent home first when census drops.
 
 ---
 

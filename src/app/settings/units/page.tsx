@@ -65,7 +65,7 @@ const defaultForm: FormState = {
   escalationSequence: ["float", "per_diem", "overtime", "agency"],
   acuityYellowExtraStaff: 1,
   acuityRedExtraStaff: 2,
-  lowCensusOrder: ["agency", "overtime", "per_diem", "full_time"],
+  lowCensusOrder: ["voluntary", "overtime", "per_diem", "full_time"],
   otApprovalThreshold: 4,
   maxOnCallPerWeek: 1,
   maxOnCallWeekendsPerMonth: 1,

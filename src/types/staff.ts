@@ -57,6 +57,8 @@ export interface Staff {
   weekendExempt: boolean;
   // Flex hours year-to-date for low census rotation fairness
   flexHoursYearToDate: number;
+  // Voluntary time off - staff indicates willingness to go home during low census
+  voluntaryFlexAvailable: boolean;
   notes: string | null;
   createdAt: string;
   updatedAt: string;

@@ -25,13 +25,25 @@ interface ShiftData {
   assignments: ShiftAssignment[];
 }
 
+interface RuleViolation {
+  ruleId: string;
+  ruleName: string;
+  ruleType: "hard" | "soft";
+  shiftId: string;
+  staffId?: string;
+  description: string;
+  penaltyScore?: number;
+}
+
 interface ScheduleGridProps {
   shifts: ShiftData[];
   onShiftClick: (shift: ShiftData) => void;
+  onViolationsClick?: (shift: ShiftData, violations: RuleViolation[]) => void;
   violations: Map<string, string[]>;
+  violationDetails?: Map<string, RuleViolation[]>;
 }
 
-export function ScheduleGrid({ shifts, onShiftClick, violations }: ScheduleGridProps) {
+export function ScheduleGrid({ shifts, onShiftClick, onViolationsClick, violations, violationDetails }: ScheduleGridProps) {
   // Group shifts by date
   const dateGroups = new Map<string, ShiftData[]>();
   for (const s of shifts) {
@@ -83,6 +95,11 @@ export function ScheduleGrid({ shifts, onShiftClick, violations }: ScheduleGridP
                       <ShiftCell
                         shift={shiftData}
                         onClick={() => onShiftClick(shiftData)}
+                        onViolationsClick={
+                          onViolationsClick
+                            ? () => onViolationsClick(shiftData, violationDetails?.get(shiftData.id) ?? [])
+                            : undefined
+                        }
                         violations={violations.get(shiftData.id) ?? []}
                       />
                     ) : (
@@ -102,10 +119,12 @@ export function ScheduleGrid({ shifts, onShiftClick, violations }: ScheduleGridP
 function ShiftCell({
   shift,
   onClick,
+  onViolationsClick,
   violations,
 }: {
   shift: ShiftData;
   onClick: () => void;
+  onViolationsClick?: () => void;
   violations: string[];
 }) {
   const staffCount = shift.assignments.length;
@@ -132,7 +151,14 @@ function ShiftCell({
           {staffCount}/{shift.requiredStaffCount} staff
         </span>
         {hasViolations && (
-          <Badge variant="destructive" className="text-[10px] px-1 py-0">
+          <Badge
+            variant="destructive"
+            className="text-[10px] px-1 py-0 cursor-pointer hover:bg-red-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViolationsClick?.();
+            }}
+          >
             {violations.length} issue{violations.length > 1 ? "s" : ""}
           </Badge>
         )}

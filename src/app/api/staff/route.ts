@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       crossTrainedUnits: body.crossTrainedUnits ?? [],
       weekendExempt: body.weekendExempt ?? false,
       flexHoursYearToDate: body.flexHoursYearToDate ?? 0,
+      voluntaryFlexAvailable: body.voluntaryFlexAvailable ?? false,
       notes: body.notes || null,
     })
     .returning()

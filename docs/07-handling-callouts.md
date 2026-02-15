@@ -301,6 +301,35 @@ Over time, the system can identify patterns:
 
 ---
 
+## Open Shifts
+
+An **open shift** is similar to a callout but planned in advance. When leave is approved ahead of time, the system creates an open shift instead of a callout.
+
+### Callout vs. Open Shift
+
+| Type | When Created | Urgency | Example |
+|------|--------------|---------|---------|
+| **Callout** | Last-minute (within 7 days) | High - need replacement ASAP | Staff calls in sick morning of shift |
+| **Open Shift** | Advance notice (beyond 7 days) | Normal - time to find coverage | Leave approved 3 weeks ahead |
+
+### Automatic Creation from Leave Approval
+
+When a manager approves leave:
+1. System finds all affected shifts during leave dates
+2. For each shift within **callout threshold** (default: 7 days) → Creates **Callout**
+3. For each shift beyond threshold → Creates **Open Shift**
+4. Original assignments are cancelled automatically
+
+### Open Shifts Page (`/open-shifts`)
+
+This page shows all shifts needing coverage:
+- Filter by status: Open, Filled, Cancelled, All
+- See shift details, original staff, reason
+- **Fill** button assigns a replacement
+- **Cancel** removes from queue
+
+---
+
 ## Low Census vs. Callouts
 
 **Callout:** Unplanned - staff can't come, shift is unexpectedly short.
@@ -313,6 +342,26 @@ These are opposites! But both require the manager to adjust staffing.
 |-----------|---------|--------|
 | Callout | Not enough staff | Find more |
 | Low Census | Too many staff | Send some home |
+
+### Low Census Order
+
+When census drops, who goes home first?
+
+**Updated Order (v1.2):**
+1. **Voluntary (VTO)** - Staff who indicated willingness to go home
+2. **Overtime** - Staff on OT (most expensive)
+3. **Per Diem** - PRN staff
+4. **Full Time** - Regular staff (only if necessary)
+
+**Note:** Agency staff are NOT in the low census order because their contracts typically guarantee minimum hours.
+
+### Voluntary Time Off (VTO)
+
+Staff can indicate they're "Available for VTO" in their profile:
+- These staff are prioritized first when low census requires sending people home
+- VTO is completely voluntary
+- Staff can toggle this on/off anytime
+- Managers can also update on behalf of staff
 
 ---
 

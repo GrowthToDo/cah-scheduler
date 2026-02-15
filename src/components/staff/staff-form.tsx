@@ -34,6 +34,7 @@ interface StaffFormData {
   homeUnit: string;
   crossTrainedUnits: string[];
   weekendExempt: boolean;
+  voluntaryFlexAvailable: boolean;
   isActive: boolean;
   notes: string;
 }
@@ -63,6 +64,7 @@ const defaultData: StaffFormData = {
   homeUnit: "ICU",
   crossTrainedUnits: [],
   weekendExempt: false,
+  voluntaryFlexAvailable: false,
   isActive: true,
   notes: "",
 };
@@ -285,6 +287,17 @@ export function StaffFormDialog({
                   className="h-4 w-4"
                 />
                 <span className="text-sm">Weekend Exempt (Admin only)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.voluntaryFlexAvailable}
+                  onChange={(e) =>
+                    setForm({ ...form, voluntaryFlexAvailable: e.target.checked })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="text-sm">Available for VTO (Low Census)</span>
               </label>
             </div>
           </div>

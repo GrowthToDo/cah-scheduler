@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StaffTable } from "@/components/staff/staff-table";
 import { StaffFormDialog } from "@/components/staff/staff-form";
+import { StaffDetailDialog } from "@/components/staff/staff-detail-dialog";
 
 interface StaffMember {
   id: string;
@@ -23,6 +24,7 @@ interface StaffMember {
   homeUnit: string | null;
   crossTrainedUnits: string[];
   weekendExempt: boolean;
+  voluntaryFlexAvailable: boolean;
   isActive: boolean;
   notes: string | null;
 }
@@ -32,6 +34,8 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
 
   const fetchStaff = useCallback(async () => {
     const res = await fetch("/api/staff");
@@ -77,6 +81,11 @@ export default function StaffPage() {
     setDialogOpen(true);
   }
 
+  function handleNameClick(staffMember: StaffMember) {
+    setSelectedStaff(staffMember);
+    setDetailDialogOpen(true);
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -97,7 +106,7 @@ export default function StaffPage() {
           {loading ? (
             <p className="text-muted-foreground">Loading...</p>
           ) : (
-            <StaffTable staff={staff} onEdit={handleEdit} />
+            <StaffTable staff={staff} onEdit={handleEdit} onNameClick={handleNameClick} />
           )}
         </CardContent>
       </Card>
@@ -126,12 +135,22 @@ export default function StaffPage() {
                 homeUnit: editingStaff.homeUnit ?? "ICU",
                 crossTrainedUnits: editingStaff.crossTrainedUnits ?? [],
                 weekendExempt: editingStaff.weekendExempt ?? false,
+                voluntaryFlexAvailable: editingStaff.voluntaryFlexAvailable ?? false,
                 isActive: editingStaff.isActive,
                 notes: editingStaff.notes ?? "",
               }
             : undefined
         }
         onSave={handleSave}
+      />
+
+      <StaffDetailDialog
+        open={detailDialogOpen}
+        onClose={() => {
+          setDetailDialogOpen(false);
+          setSelectedStaff(null);
+        }}
+        staff={selectedStaff}
       />
     </div>
   );

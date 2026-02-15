@@ -59,6 +59,7 @@ Here's every page in the application and what you can do on each.
 | Edit staff info | Click on a staff member, then "Edit" |
 | Deactivate staff | Edit and set "Active" to No |
 | View certifications | Click into staff detail view |
+| **View staff calendar** | Click on staff member's name to see their schedule |
 
 ### Adding New Staff
 
@@ -135,6 +136,49 @@ When creating a schedule, you might generate multiple options:
 | See violations | Click into scenario detail |
 | Select a scenario | Click "Select" on the best one |
 | Reject a scenario | Click "Reject" |
+
+### Staff Calendar View
+
+When you click a staff member's **name** (not the edit button), a calendar opens showing their schedule:
+
+**Color Coding:**
+- **Blue** - Day shift assigned
+- **Purple** - Night shift assigned
+- **Green** - On approved leave
+- **Gray** - Off / not scheduled
+
+**Features:**
+- Navigate between months using arrows
+- Default view: current schedule period
+- Shows staff summary (role, FTE, home unit)
+
+---
+
+## Open Shifts (`/open-shifts`)
+
+**Purpose:** View and manage shifts that need coverage.
+
+### What You'll See
+
+- **Shift List** - All open, filled, and cancelled open shifts
+- **Filter Tabs** - Open, Filled, Cancelled, All
+- **Shift Details** - Date, time, unit, original staff, reason, priority
+- **Status Badges** - Current state of each open shift
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| See shifts needing coverage | Click "Open" filter tab |
+| Fill an open shift | Click "Fill" button, select staff member |
+| Cancel an open shift | Click "Cancel" button |
+| View all history | Click "All" filter tab |
+
+### How Open Shifts Are Created
+
+Open shifts are created automatically when:
+1. Leave is approved for dates with existing assignments
+2. A callout is logged (within threshold days, it becomes a callout instead)
 
 ---
 
@@ -429,17 +473,18 @@ Review these checks before approving!
 The application is organized around your workflow:
 
 1. **Dashboard** - Your starting point
-2. **Staff** - Who you're scheduling
-3. **Schedule** - The main event
+2. **Staff** - Who you're scheduling (click names for calendar view)
+3. **Schedule** - The main event (click issue badges for details)
 4. **Scenarios** - Options comparison
 5. **Callouts** - Handle absences
-6. **Leave** - Time-off requests
-7. **Swaps** - Shift trades
-8. **Availability** - PRN scheduling
-9. **Rules** - Scheduling constraints
-10. **Units** - Department configuration
-11. **Holidays** - Special days
-12. **Audit** - Change history
+6. **Open Shifts** - Fill coverage needs
+7. **Leave** - Time-off requests (auto-creates open shifts when approved)
+8. **Swaps** - Shift trades
+9. **Availability** - PRN scheduling
+10. **Rules** - Scheduling constraints
+11. **Units** - Department configuration
+12. **Holidays** - Special days
+13. **Audit** - Change history
 
 Navigate using the sidebar, and you'll find what you need!
 

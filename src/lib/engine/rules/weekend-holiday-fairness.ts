@@ -1,4 +1,23 @@
 import type { RuleEvaluator, RuleContext, RuleViolation } from "./types";
+import { db } from "@/db";
+import { staffHolidayAssignment } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+
+/**
+ * Holiday groups - maps individual holiday names to logical holiday groups.
+ * Working either Christmas Eve OR Christmas Day counts as "worked Christmas".
+ */
+const HOLIDAY_GROUPS: Record<string, string> = {
+  "Christmas Eve": "Christmas",
+  "Christmas Day": "Christmas",
+};
+
+/**
+ * Get the logical holiday name (merged for grouped holidays like Christmas).
+ */
+function getLogicalHolidayName(holidayName: string): string {
+  return HOLIDAY_GROUPS[holidayName] ?? holidayName;
+}
 
 /**
  * Weekend Count Rule (Soft)
@@ -150,8 +169,9 @@ export const consecutiveWeekendRule: RuleEvaluator = {
 
 /**
  * Holiday Fairness Rule (Soft)
- * Similar to weekend fairness - distribute holiday shifts fairly.
- * Staff should work a minimum number of holiday shifts per schedule.
+ * Tracks holiday fairness ANNUALLY (not per schedule period).
+ * Christmas Eve and Christmas Day are merged as a single "Christmas" holiday.
+ * Staff should work a fair distribution of holidays throughout the year.
  */
 export const holidayFairnessRule: RuleEvaluator = {
   id: "holiday-fairness",
@@ -163,51 +183,89 @@ export const holidayFairnessRule: RuleEvaluator = {
 
     if (context.publicHolidays.length === 0) return violations;
 
-    const requiredHolidays = context.unitConfig?.holidayShiftsRequired ?? 1;
-    const holidayDates = new Set(context.publicHolidays.map((h) => h.date));
+    // Get the year from the schedule
+    const scheduleYear = context.scheduleStartDate
+      ? new Date(context.scheduleStartDate).getFullYear()
+      : new Date().getFullYear();
 
-    // Count holiday shifts per staff
-    const staffHolidayCounts = new Map<string, number>();
-    for (const a of context.assignments) {
-      if (!holidayDates.has(a.date)) continue;
-      const count = staffHolidayCounts.get(a.staffId) ?? 0;
-      staffHolidayCounts.set(a.staffId, count + 1);
+    // Build a map of holiday dates to their logical names (merging Christmas)
+    const holidayDateToName = new Map<string, string>();
+    for (const h of context.publicHolidays) {
+      const logicalName = getLogicalHolidayName(h.name);
+      holidayDateToName.set(h.date, logicalName);
     }
 
-    // Calculate average
+    // Get historical holiday assignments for this year from the tracking table
+    const historicalAssignments = db
+      .select()
+      .from(staffHolidayAssignment)
+      .where(eq(staffHolidayAssignment.year, scheduleYear))
+      .all();
+
+    // Build map of staff -> set of unique holidays worked this year (historical)
+    const staffYearlyHolidays = new Map<string, Set<string>>();
+    for (const ha of historicalAssignments) {
+      const existing = staffYearlyHolidays.get(ha.staffId) ?? new Set();
+      existing.add(ha.holidayName);
+      staffYearlyHolidays.set(ha.staffId, existing);
+    }
+
+    // Add current schedule holiday assignments (using logical names)
+    for (const a of context.assignments) {
+      const logicalHolidayName = holidayDateToName.get(a.date);
+      if (!logicalHolidayName) continue;
+
+      const existing = staffYearlyHolidays.get(a.staffId) ?? new Set();
+      existing.add(logicalHolidayName);
+      staffYearlyHolidays.set(a.staffId, existing);
+    }
+
+    // Calculate the count of unique holidays per staff (for this year)
+    const staffHolidayCounts = new Map<string, number>();
+    for (const [staffId, holidays] of staffYearlyHolidays) {
+      staffHolidayCounts.set(staffId, holidays.size);
+    }
+
+    // Calculate average across all active staff
     const activeStaffCount = [...context.staffMap.values()].filter((s) => s.isActive).length;
     if (activeStaffCount === 0) return violations;
 
-    const totalHolidayAssignments = [...staffHolidayCounts.values()].reduce((a, b) => a + b, 0);
-    const average = totalHolidayAssignments / activeStaffCount;
+    const totalHolidayCount = [...staffHolidayCounts.values()].reduce((a, b) => a + b, 0);
+    const average = totalHolidayCount / activeStaffCount;
 
-    // Check each active staff
+    // Get unique logical holidays in the current schedule
+    const uniqueHolidaysInSchedule = new Set([...holidayDateToName.values()]);
+
+    // Check each active staff for fairness
     for (const [staffId, staffInfo] of context.staffMap) {
       if (!staffInfo.isActive) continue;
       if (staffInfo.weekendExempt) continue; // Use same exemption for holidays
 
       const count = staffHolidayCounts.get(staffId) ?? 0;
 
-      // Penalize if significantly above or below average
+      // Penalize if significantly above average (more than 1 holiday above)
       if (count > average + 1) {
         violations.push({
           ruleId: "holiday-fairness",
-          ruleName: "Holiday Fairness",
+          ruleName: "Holiday Fairness (Annual)",
           ruleType: "soft",
           shiftId: "",
           staffId,
-          description: `${staffInfo.firstName} ${staffInfo.lastName} has ${count} holiday shifts, above average of ${average.toFixed(1)}`,
+          description: `${staffInfo.firstName} ${staffInfo.lastName} has worked ${count} holidays this year, above average of ${average.toFixed(1)}`,
           penaltyScore: (count - average) * 0.4,
         });
-      } else if (count < requiredHolidays && holidayDates.size >= requiredHolidays) {
+      }
+
+      // Penalize if significantly below average (only if they could have worked more)
+      if (count < average - 1 && uniqueHolidaysInSchedule.size > 0) {
         violations.push({
           ruleId: "holiday-fairness",
-          ruleName: "Holiday Fairness",
+          ruleName: "Holiday Fairness (Annual)",
           ruleType: "soft",
           shiftId: "",
           staffId,
-          description: `${staffInfo.firstName} ${staffInfo.lastName} has ${count} holiday shifts, below required ${requiredHolidays}`,
-          penaltyScore: (requiredHolidays - count) * 0.5,
+          description: `${staffInfo.firstName} ${staffInfo.lastName} has worked ${count} holidays this year, below average of ${average.toFixed(1)}`,
+          penaltyScore: (average - count) * 0.3,
         });
       }
     }

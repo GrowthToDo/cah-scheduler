@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.1
-**Last Updated:** February 13, 2026
+**Document Version:** 1.2
+**Last Updated:** February 15, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -58,6 +58,7 @@
 | **Reliability Rating** | 1-5 scale indicating historical reliability |
 | **FTE** | Full-Time Equivalent (1.0 = 40 hours/week, 0.5 = 20 hours/week) |
 | **Flex Hours YTD** | Tracks how many hours staff has been flexed home (for fair rotation) |
+| **Voluntary Flex Available** | If true, staff is willing to go home voluntarily during low census (VTO) |
 
 ---
 
@@ -184,13 +185,15 @@ Soft rules are **preferences** that the scheduler tries to optimize. Violations 
 - **Penalty:** Applied per extra consecutive weekend
 - **Purpose:** Ensures weekends are distributed fairly over time
 
-### 4.4 Holiday Fairness *(NEW)*
-- **Rule:** Holiday shifts should be distributed fairly among staff
-- **Minimum Required:** 1 holiday shift per schedule period (configurable)
+### 4.4 Holiday Fairness *(UPDATED)*
+- **Rule:** Holiday shifts should be distributed fairly among staff **annually** (not per schedule period)
+- **Tracking:** System maintains `staff_holiday_assignment` table to track yearly holiday assignments
+- **Holiday Grouping:** Certain holidays are grouped together as one:
+  - **Christmas:** Christmas Eve and Christmas Day count as ONE "Christmas" holiday. Working either day counts as "worked Christmas."
 - **Penalties:**
-  - Staff below minimum: Penalty proportional to shortfall
-  - Staff significantly above average: Small penalty
-- **Holidays Tracked:** New Year's Day, MLK Day, Presidents' Day, Memorial Day, Independence Day, Labor Day, Thanksgiving, Christmas Eve, Christmas Day
+  - Staff below yearly average: Penalty proportional to shortfall
+  - Staff significantly above yearly average: Small penalty
+- **Holidays Tracked:** New Year's Day, MLK Day, Presidents' Day, Memorial Day, Independence Day, Labor Day, Thanksgiving, Christmas (Eve + Day combined)
 
 ### 4.5 Staff Preference Match
 - **Rule:** Try to match staff to their preferred shifts and days
@@ -240,7 +243,8 @@ Each unit (ICU, ER, Med-Surg, etc.) can have its own configuration:
 | **Escalation Sequence** | Order to try when filling callouts | Float → Per Diem → Overtime → Agency |
 | **Acuity Yellow Extra Staff** | Additional staff needed at Yellow acuity | 1 |
 | **Acuity Red Extra Staff** | Additional staff needed at Red acuity | 2 |
-| **Low Census Order** | Order to send home during low census | Agency → Overtime → Per Diem → Full Time |
+| **Low Census Order** | Order to send home during low census | Voluntary → Overtime → Per Diem → Full Time |
+| **Callout Threshold Days** | Days before shift to classify as callout vs open shift | 7 |
 | **OT Approval Threshold** | Hours of OT requiring CNO approval | 4 |
 | **Max On-Call Per Week** | Maximum on-call shifts per week | 1 |
 | **Max On-Call Weekends Per Month** | Maximum on-call weekends per month | 1 |
@@ -292,15 +296,24 @@ When a callout occurs (staff calls in sick, etc.), the system follows an escalat
 When census drops and staff need to be sent home, follow this order:
 
 ### Default Low Census Order:
-1. **Agency** - Send home first (highest cost)
+1. **Voluntary (VTO)** - Staff who have indicated willingness to go home (Voluntary Time Off)
 2. **Overtime** - Send home staff on OT
 3. **Per Diem** - Send home PRN staff
 4. **Full Time** - Send home full-time staff (rotated fairly based on Flex Hours YTD)
+
+**Note:** Agency staff are not included in the low census order because agency contracts typically guarantee minimum hours. Sending agency home may still incur costs.
+
+### Voluntary Time Off (VTO):
+- Staff can indicate they are "Available for VTO" via the Staff page
+- These staff are prioritized first when low census requires sending people home
+- VTO is voluntary and based on staff preference
+- VTO indicator can be toggled on/off by staff or managers
 
 ### Flex Tracking:
 - System tracks flex hours year-to-date per staff member
 - Used to ensure fair rotation of who gets sent home
 - Staff with fewer flex hours YTD are more likely to be flexed next
+- Within each category (VTO, OT, PRN, FT), staff are sorted by flex hours YTD (lowest first)
 
 ---
 
@@ -352,13 +365,15 @@ The CAH Scheduler application provides the following pages for managing scheduli
 | **Schedule** | `/schedule` | View and edit the schedule grid, make assignments, see coverage |
 | **Scenarios** | `/scenarios` | Compare different scheduling scenarios and their scores |
 | **Callouts** | `/callouts` | Log and manage staff callouts, track replacements and escalation |
+| **Open Shifts** | `/open-shifts` | View and manage shifts that need coverage - from approved leave or callouts |
 | **Audit Trail** | `/audit` | View all changes made to the system with timestamps and details |
 
 ### 11.2 Request Management Pages
 
 | Page | URL | Description |
 |------|-----|-------------|
-| **Leave Management** | `/leave` | View, approve, or deny leave requests (vacation, sick, maternity, etc.). Create new leave requests for staff. Filter by status: All, Pending, Approved, Denied. |
+| **Leave Management** | `/leave` | View, approve, or deny leave requests (vacation, sick, maternity, etc.). Create new leave requests for staff. Filter by status: All, Pending, Approved, Denied. **When leave is approved, affected shifts automatically become open shifts or callouts.** |
+| **Open Shifts** | `/open-shifts` | View shifts needing coverage (from leave or callouts). Filter by status: Open, Filled, Cancelled. Fill shifts by assigning staff. Shows original staff, reason, priority, and shift details. |
 | **Shift Swaps** | `/swaps` | View, approve, or deny shift swap requests between staff. Shows requesting staff, their shift, target staff, and target shift. |
 | **PRN Availability** | `/availability` | View per-diem (PRN) staff availability submissions. See which dates each PRN staff is available. Highlights staff who haven't submitted availability yet. |
 
@@ -378,19 +393,22 @@ All pages are accessible from the left sidebar. The navigation order is:
 3. Schedule
 4. Scenarios
 5. Callouts
-6. Leave
-7. Shift Swaps
-8. PRN Availability
-9. Rules
-10. Units
-11. Holidays
-12. Audit Trail
+6. Open Shifts
+7. Leave
+8. Shift Swaps
+9. PRN Availability
+10. Rules
+11. Units
+12. Holidays
+13. Audit Trail
 
 ### 11.5 Common Actions
 
 | Action | Where | How |
 |--------|-------|-----|
-| **Approve/Deny Leave** | `/leave` | Click "Approve" or "Deny" button on pending requests |
+| **Approve/Deny Leave** | `/leave` | Click "Approve" or "Deny" button on pending requests. Approval auto-creates open shifts or callouts for affected assignments. |
+| **Fill Open Shift** | `/open-shifts` | Click "Fill" button, select staff member to assign |
+| **View Staff Calendar** | `/staff` | Click on a staff member's name to see their day-by-day calendar view |
 | **Approve/Deny Swap** | `/swaps` | Click "Approve" or "Deny" button on pending swap requests |
 | **Create Leave Request** | `/leave` | Click "New Leave Request" button, fill form |
 | **View PRN Availability** | `/availability` | See calendar of available dates per PRN staff |
@@ -425,6 +443,7 @@ Please review each section and note any changes needed:
 |---------|------|---------|
 | 1.0 | Feb 2026 | Initial document with all rules and configuration options |
 | 1.1 | Feb 13, 2026 | Added Section 11 (Application UI Guide) documenting all available pages: Leave Management, Shift Swaps, PRN Availability, Unit Configuration, and Holidays Management |
+| 1.2 | Feb 15, 2026 | **Major updates based on expert feedback:** (1) Holiday fairness now tracks annually, Christmas Eve/Day merged as one holiday; (2) Low census order updated - removed Agency, added Voluntary Time Off (VTO); (3) Added Open Shifts page for managing shifts needing coverage; (4) Leave approval now auto-creates open shifts or callouts for affected assignments; (5) Staff page now shows clickable calendar view for each staff member; (6) Added callout threshold days configuration |
 
 ---
 

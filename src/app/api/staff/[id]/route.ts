@@ -49,6 +49,7 @@ export async function PUT(
       crossTrainedUnits: body.crossTrainedUnits,
       weekendExempt: body.weekendExempt,
       flexHoursYearToDate: body.flexHoursYearToDate,
+      voluntaryFlexAvailable: body.voluntaryFlexAvailable,
       isActive: body.isActive,
       notes: body.notes,
       updatedAt: new Date().toISOString(),

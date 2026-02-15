@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { AssignmentDialog } from "@/components/schedule/assignment-dialog";
+import { ShiftViolationsModal } from "@/components/schedule/shift-violations-modal";
 import { format, parseISO } from "date-fns";
 
 interface ShiftAssignment {
@@ -41,10 +42,20 @@ interface ScheduleData {
   shifts: ShiftData[];
 }
 
+interface RuleViolation {
+  ruleId: string;
+  ruleName: string;
+  ruleType: "hard" | "soft";
+  shiftId: string;
+  staffId?: string;
+  description: string;
+  penaltyScore?: number;
+}
+
 interface EvalResult {
   isValid: boolean;
-  hardViolations: { shiftId: string; description: string }[];
-  softViolations: { shiftId: string; description: string; penaltyScore?: number }[];
+  hardViolations: RuleViolation[];
+  softViolations: RuleViolation[];
   totalPenalty: number;
 }
 
@@ -57,6 +68,9 @@ export default function ScheduleBuilderPage() {
   const [selectedShift, setSelectedShift] = useState<ShiftData | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [violationsModalOpen, setViolationsModalOpen] = useState(false);
+  const [selectedShiftForViolations, setSelectedShiftForViolations] = useState<ShiftData | null>(null);
+  const [selectedViolations, setSelectedViolations] = useState<RuleViolation[]>([]);
 
   const fetchSchedule = useCallback(async () => {
     const res = await fetch(`/api/schedules/${scheduleId}`);
@@ -111,18 +125,40 @@ export default function ScheduleBuilderPage() {
     setDialogOpen(true);
   }
 
+  function handleViolationsClick(shift: ShiftData, violations: RuleViolation[]) {
+    setSelectedShiftForViolations(shift);
+    setSelectedViolations(violations);
+    setViolationsModalOpen(true);
+  }
+
   if (loading || !schedule) {
     return <p className="text-muted-foreground">Loading schedule...</p>;
   }
 
   // Build violations map for the grid
   const violationMap = new Map<string, string[]>();
+  const violationDetailsMap = new Map<string, RuleViolation[]>();
   if (evaluation) {
-    for (const v of [...evaluation.hardViolations, ...evaluation.softViolations]) {
+    for (const v of evaluation.hardViolations) {
       if (v.shiftId) {
         const list = violationMap.get(v.shiftId) ?? [];
         list.push(v.description);
         violationMap.set(v.shiftId, list);
+
+        const details = violationDetailsMap.get(v.shiftId) ?? [];
+        details.push({ ...v, ruleType: "hard" });
+        violationDetailsMap.set(v.shiftId, details);
+      }
+    }
+    for (const v of evaluation.softViolations) {
+      if (v.shiftId) {
+        const list = violationMap.get(v.shiftId) ?? [];
+        list.push(v.description);
+        violationMap.set(v.shiftId, list);
+
+        const details = violationDetailsMap.get(v.shiftId) ?? [];
+        details.push({ ...v, ruleType: "soft" });
+        violationDetailsMap.set(v.shiftId, details);
       }
     }
   }
@@ -236,7 +272,9 @@ export default function ScheduleBuilderPage() {
           <ScheduleGrid
             shifts={schedule.shifts}
             onShiftClick={handleShiftClick}
+            onViolationsClick={handleViolationsClick}
             violations={violationMap}
+            violationDetails={violationDetailsMap}
           />
         </CardContent>
       </Card>
@@ -252,6 +290,18 @@ export default function ScheduleBuilderPage() {
         scheduleId={scheduleId}
         onAssign={handleAssign}
         onRemove={handleRemove}
+      />
+
+      {/* Shift violations modal */}
+      <ShiftViolationsModal
+        open={violationsModalOpen}
+        onClose={() => {
+          setViolationsModalOpen(false);
+          setSelectedShiftForViolations(null);
+          setSelectedViolations([]);
+        }}
+        shift={selectedShiftForViolations}
+        violations={selectedViolations}
       />
     </div>
   );

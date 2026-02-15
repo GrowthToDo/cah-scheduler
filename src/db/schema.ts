@@ -37,9 +37,14 @@ export const unit = sqliteTable(
     acuityYellowExtraStaff: integer("acuity_yellow_extra_staff").notNull().default(1),
     acuityRedExtraStaff: integer("acuity_red_extra_staff").notNull().default(2),
     // Low census policy - order of who to send home (JSON array)
+    // Note: Agency removed - contracts typically guarantee minimum hours
     lowCensusOrder: text("low_census_order", { mode: "json" })
       .$type<string[]>()
-      .default(["agency", "overtime", "per_diem", "full_time"]),
+      .default(["voluntary", "overtime", "per_diem", "full_time"]),
+    // Days before shift when leave approval creates callout vs open shift
+    // If leave is approved within this many days of shift, create callout (urgent)
+    // If beyond this threshold, create open shift for bidding
+    calloutThresholdDays: integer("callout_threshold_days").notNull().default(7),
     // OT approval threshold (hours beyond which CNO approval needed)
     otApprovalThreshold: integer("ot_approval_threshold").notNull().default(4),
     // On-call limits
@@ -129,6 +134,10 @@ export const staff = sqliteTable(
       .default(false),
     // Flex hours year-to-date for low census rotation fairness
     flexHoursYearToDate: real("flex_hours_year_to_date").notNull().default(0),
+    // Voluntary time off - staff indicates willingness to go home during low census
+    voluntaryFlexAvailable: integer("voluntary_flex_available", { mode: "boolean" })
+      .notNull()
+      .default(false),
     notes: text("notes"),
     createdAt: text("created_at")
       .notNull()
@@ -695,6 +704,7 @@ export const exceptionLog = sqliteTable(
         "swap_request",
         "unit",
         "shift",
+        "open_shift",
       ],
     }).notNull(),
     entityId: text("entity_id").notNull(),
@@ -724,6 +734,9 @@ export const exceptionLog = sqliteTable(
         "safe_harbor",
         "acuity_changed",
         "agency_called",
+        "open_shift_created",
+        "open_shift_filled",
+        "open_shift_cancelled",
       ],
     }).notNull(),
     description: text("description").notNull(),
@@ -744,5 +757,85 @@ export const exceptionLog = sqliteTable(
     index("exception_log_entity_idx").on(table.entityType, table.entityId),
     index("exception_log_action_idx").on(table.action),
     index("exception_log_date_idx").on(table.createdAt),
+  ]
+);
+
+// ============================================================
+// STAFF HOLIDAY ASSIGNMENT (for annual holiday fairness tracking)
+// ============================================================
+export const staffHolidayAssignment = sqliteTable(
+  "staff_holiday_assignment",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    staffId: text("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    // Logical holiday name (e.g., "Christmas" for both Eve and Day)
+    holidayName: text("holiday_name").notNull(),
+    year: integer("year").notNull(),
+    shiftId: text("shift_id").references(() => shift.id, { onDelete: "set null" }),
+    assignmentId: text("assignment_id").references(() => assignment.id, { onDelete: "set null" }),
+    assignedAt: text("assigned_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("staff_holiday_assignment_staff_idx").on(table.staffId),
+    index("staff_holiday_assignment_year_idx").on(table.year),
+    index("staff_holiday_assignment_holiday_idx").on(table.holidayName, table.year),
+    // Prevent duplicate holiday assignments for same staff in same year
+    uniqueIndex("staff_holiday_assignment_unique_idx").on(
+      table.staffId,
+      table.holidayName,
+      table.year
+    ),
+  ]
+);
+
+// ============================================================
+// OPEN SHIFT (shifts needing coverage - for bidding)
+// ============================================================
+export const openShift = sqliteTable(
+  "open_shift",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    shiftId: text("shift_id")
+      .notNull()
+      .references(() => shift.id, { onDelete: "cascade" }),
+    originalStaffId: text("original_staff_id")
+      .notNull()
+      .references(() => staff.id),
+    originalAssignmentId: text("original_assignment_id")
+      .references(() => assignment.id, { onDelete: "set null" }),
+    reason: text("reason", {
+      enum: ["leave_approved", "callout", "schedule_change", "other"],
+    }).notNull(),
+    reasonDetail: text("reason_detail"),
+    status: text("status", {
+      enum: ["open", "filled", "cancelled"],
+    })
+      .notNull()
+      .default("open"),
+    priority: text("priority", {
+      enum: ["low", "normal", "high", "urgent"],
+    })
+      .notNull()
+      .default("normal"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    filledAt: text("filled_at"),
+    filledByStaffId: text("filled_by_staff_id").references(() => staff.id),
+    filledByAssignmentId: text("filled_by_assignment_id").references(() => assignment.id),
+    notes: text("notes"),
+  },
+  (table) => [
+    index("open_shift_shift_idx").on(table.shiftId),
+    index("open_shift_status_idx").on(table.status),
+    index("open_shift_priority_idx").on(table.priority),
   ]
 );
