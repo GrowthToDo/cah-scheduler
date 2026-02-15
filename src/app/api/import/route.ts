@@ -271,14 +271,108 @@ export async function POST(request: Request) {
   }
 }
 
-// GET endpoint to download template
+// GET endpoint to export current data as Excel
 export async function GET() {
-  const buffer = generateTemplate();
+  const buffer = exportCurrentData();
   return new NextResponse(buffer, {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": "attachment; filename=cah-scheduler-template.xlsx",
+      "Content-Disposition": "attachment; filename=cah-scheduler-data.xlsx",
     },
   });
+}
+
+// Export current database data to Excel
+function exportCurrentData(): ArrayBuffer {
+  // Dynamic import for xlsx
+  const XLSX = require("xlsx");
+
+  // Query current data from database
+  const staffData = db.select().from(schema.staff).all();
+  const unitsData = db.select().from(schema.unit).all();
+  const holidaysData = db.select().from(schema.publicHoliday).all();
+
+  const workbook = XLSX.utils.book_new();
+
+  // Staff sheet
+  const staffHeaders = [
+    "First Name",
+    "Last Name",
+    "Role",
+    "Employment Type",
+    "FTE",
+    "Home Unit",
+    "Cross-Trained Units",
+    "Competency Level",
+    "Charge Nurse Qualified",
+    "Reliability Rating",
+    "Email",
+    "Phone",
+    "Hire Date",
+    "Weekend Exempt",
+    "VTO Available",
+    "Notes",
+  ];
+
+  const staffRows = staffData.map((s) => [
+    s.firstName,
+    s.lastName,
+    s.role,
+    s.employmentType,
+    s.fte,
+    s.homeUnit || "",
+    (s.crossTrainedUnits || []).join(", "),
+    s.icuCompetencyLevel,
+    s.isChargeNurseQualified ? "Yes" : "No",
+    s.reliabilityRating,
+    s.email || "",
+    s.phone || "",
+    s.hireDate,
+    s.weekendExempt ? "Yes" : "No",
+    s.voluntaryFlexAvailable ? "Yes" : "No",
+    s.notes || "",
+  ]);
+
+  const staffSheet = XLSX.utils.aoa_to_sheet([staffHeaders, ...staffRows]);
+  XLSX.utils.book_append_sheet(workbook, staffSheet, "Staff");
+
+  // Units sheet
+  const unitsHeaders = [
+    "Name",
+    "Description",
+    "Min Staff Day",
+    "Min Staff Night",
+    "Weekend Shifts Required",
+    "Holiday Shifts Required",
+  ];
+
+  // For min staff, we'll use a default since it's not stored directly
+  // The actual staffing is determined by census bands
+  const unitsRows = unitsData.map((u) => [
+    u.name,
+    u.description || "",
+    4, // Default min staff day
+    3, // Default min staff night
+    u.weekendShiftsRequired,
+    u.holidayShiftsRequired,
+  ]);
+
+  const unitsSheet = XLSX.utils.aoa_to_sheet([unitsHeaders, ...unitsRows]);
+  XLSX.utils.book_append_sheet(workbook, unitsSheet, "Units");
+
+  // Holidays sheet
+  const holidaysHeaders = ["Name", "Date"];
+
+  const holidaysRows = holidaysData.map((h) => [
+    h.name,
+    h.date,
+  ]);
+
+  const holidaysSheet = XLSX.utils.aoa_to_sheet([holidaysHeaders, ...holidaysRows]);
+  XLSX.utils.book_append_sheet(workbook, holidaysSheet, "Holidays");
+
+  // Generate buffer
+  const buffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  return buffer;
 }
