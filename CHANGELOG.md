@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Summary
 
-This release adds an **Excel Import** feature that allows hospitals to bootstrap the system with their existing staff data from spreadsheets. Instead of manually entering each staff member, unit, and holiday, users can now upload a single Excel file to import everything at once.
+This release adds an **Excel Import/Export** feature that allows hospitals to manage their data via spreadsheets. Users can export current data, edit in Excel, and re-import - making bulk updates simple. This also enables first-time setup by filling in an exported template.
 
 ---
 
@@ -24,14 +24,16 @@ Hospitals typically have their staff information stored in Excel spreadsheets. M
 
 A new **Setup** page (`/setup`) allows users to:
 
-1. **Download a template** - Pre-formatted Excel file with 3 sheets
-2. **Fill in their data** - Staff, Units, Holidays
+1. **Export current data** - Download an Excel file with current Staff, Units, and Holidays
+2. **Edit in Excel** - Add, remove, or modify entries in the familiar spreadsheet format
 3. **Upload and validate** - System checks for errors before importing
-4. **Import with one click** - Deletes existing data and imports fresh
+4. **Import with one click** - Replaces existing data with the uploaded file
+
+This creates a seamless **Export → Edit → Import** workflow for bulk data management.
 
 ---
 
-### Excel Template Format
+### Excel File Format
 
 **Sheet 1: Staff**
 | Column | Required | Example |
@@ -73,13 +75,13 @@ A new **Setup** page (`/setup`) allows users to:
 
 ### How It Works
 
-#### Step 1: Download Template
-- Click "Download Template" on the Setup page
-- Opens Excel file with example data
-- Three sheets: Staff, Units, Holidays
+#### Step 1: Export Current Data
+- Click "Download Data" on the Setup page
+- Downloads Excel file with your current Staff, Units, and Holidays
+- First-time users get headers only (empty database)
 
-#### Step 2: Fill In Your Data
-- Replace example rows with your actual data
+#### Step 2: Edit in Excel
+- Add new rows, remove rows, or modify existing entries
 - Required fields must be filled
 - Optional fields can be left blank (defaults applied)
 

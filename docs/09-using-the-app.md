@@ -20,28 +20,29 @@ Here's every page in the application and what you can do on each.
 
 ## Setup (`/setup`)
 
-**Purpose:** Import your hospital's data from an Excel spreadsheet.
+**Purpose:** Import and export your hospital's data via Excel spreadsheet.
 
 ### When to Use This Page
 
 - **First time setup** - Import all your staff, units, and holidays at once
+- **Bulk updates** - Export current data, edit in Excel, and re-import
 - **Reset** - Upload a new Excel file to replace all existing data
 
 ### What You'll See
 
-- **Download Template** - Get a pre-formatted Excel file
-- **Upload Area** - Drag and drop your filled-in Excel file
+- **Download Data** - Export current database as Excel file
+- **Upload Area** - Drag and drop your Excel file
 - **Preview** - See counts of what will be imported
 - **Errors/Warnings** - Issues that need fixing before import
 
-### The Import Process
+### The Export → Edit → Import Workflow
 
 ```
-1. Download Template
+1. Click "Download Data" (exports current Staff, Units, Holidays)
         ↓
-2. Fill in your data (Staff, Units, Holidays)
+2. Edit in Excel (add rows, remove rows, change values)
         ↓
-3. Upload the Excel file
+3. Upload the modified Excel file
         ↓
 4. Review the preview (fix any errors)
         ↓
@@ -49,8 +50,10 @@ Here's every page in the application and what you can do on each.
         ↓
 6. Confirm the data reset
         ↓
-7. Done! Go to Staff page to see your data
+7. Done! Changes are applied
 ```
+
+**First-time setup:** If the database is empty, the exported file will have headers only - fill in your data and upload.
 
 ### Excel Template Sheets
 
@@ -72,7 +75,7 @@ Here's every page in the application and what you can do on each.
 
 | Task | How To |
 |------|--------|
-| Get template | Click "Download Template" button |
+| Export current data | Click "Download Data" button |
 | Upload data | Drag file to upload area or click "Browse" |
 | Fix errors | Read error messages, fix in Excel, re-upload |
 | Import | Click "Import Data" after preview looks good |
@@ -80,10 +83,10 @@ Here's every page in the application and what you can do on each.
 
 ### Important Notes
 
-- **Data Reset**: Importing DELETES all existing data
+- **Data Reset**: Importing REPLACES all existing data with the uploaded file
 - **Validation**: System checks for errors before importing
 - **Defaults**: After import, default rules and shift definitions are created
-- **One-time setup**: After initial import, use the Staff page for changes
+- **Bulk edits**: For bulk changes, export → edit in Excel → re-import is faster than UI edits
 
 ---
 
