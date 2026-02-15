@@ -49,7 +49,7 @@ export function StaffTable({
 }: {
   staff: Staff[];
   onEdit: (id: string) => void;
-  onNameClick?: (staff: Staff) => void;
+  onNameClick?: (staff: { id: string; firstName: string; lastName: string }) => void;
 }) {
   return (
     <Table>

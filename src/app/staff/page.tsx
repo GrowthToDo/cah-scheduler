@@ -81,9 +81,12 @@ export default function StaffPage() {
     setDialogOpen(true);
   }
 
-  function handleNameClick(staffMember: StaffMember) {
-    setSelectedStaff(staffMember);
-    setDetailDialogOpen(true);
+  function handleNameClick(staffMember: { id: string; firstName: string; lastName: string }) {
+    const fullStaff = staff.find((s) => s.id === staffMember.id);
+    if (fullStaff) {
+      setSelectedStaff(fullStaff);
+      setDetailDialogOpen(true);
+    }
   }
 
   return (
