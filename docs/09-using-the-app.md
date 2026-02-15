@@ -18,6 +18,75 @@ Here's every page in the application and what you can do on each.
 
 ---
 
+## Setup (`/setup`)
+
+**Purpose:** Import your hospital's data from an Excel spreadsheet.
+
+### When to Use This Page
+
+- **First time setup** - Import all your staff, units, and holidays at once
+- **Reset** - Upload a new Excel file to replace all existing data
+
+### What You'll See
+
+- **Download Template** - Get a pre-formatted Excel file
+- **Upload Area** - Drag and drop your filled-in Excel file
+- **Preview** - See counts of what will be imported
+- **Errors/Warnings** - Issues that need fixing before import
+
+### The Import Process
+
+```
+1. Download Template
+        ↓
+2. Fill in your data (Staff, Units, Holidays)
+        ↓
+3. Upload the Excel file
+        ↓
+4. Review the preview (fix any errors)
+        ↓
+5. Click "Import Data"
+        ↓
+6. Confirm the data reset
+        ↓
+7. Done! Go to Staff page to see your data
+```
+
+### Excel Template Sheets
+
+**Sheet 1: Staff**
+- First Name, Last Name (required)
+- Role: RN, LPN, or CNA (required)
+- Employment Type: full_time, part_time, per_diem, float, agency (required)
+- FTE, Home Unit, Competency Level, etc. (optional)
+
+**Sheet 2: Units**
+- Name (required) - e.g., ICU, ER, Med-Surg
+- Min Staff Day, Min Staff Night (required)
+
+**Sheet 3: Holidays**
+- Name (required) - e.g., Christmas Day
+- Date (required) - e.g., 2026-12-25
+
+### Common Tasks
+
+| Task | How To |
+|------|--------|
+| Get template | Click "Download Template" button |
+| Upload data | Drag file to upload area or click "Browse" |
+| Fix errors | Read error messages, fix in Excel, re-upload |
+| Import | Click "Import Data" after preview looks good |
+| Start over | Click "Remove" on uploaded file |
+
+### Important Notes
+
+- **Data Reset**: Importing DELETES all existing data
+- **Validation**: System checks for errors before importing
+- **Defaults**: After import, default rules and shift definitions are created
+- **One-time setup**: After initial import, use the Staff page for changes
+
+---
+
 ## Dashboard (`/dashboard`)
 
 **Purpose:** Your home base. Quick overview of what's happening.
@@ -482,19 +551,20 @@ Review these checks before approving!
 
 The application is organized around your workflow:
 
-1. **Dashboard** - Your starting point
-2. **Staff** - Who you're scheduling (click names for calendar view)
-3. **Schedule** - The main event (click issue badges for details)
-4. **Scenarios** - Options comparison
-5. **Callouts** - Handle absences
-6. **Coverage** - Review and approve replacement candidates
-7. **Leave** - Time-off requests (auto-creates open shifts when approved)
-8. **Swaps** - Shift trades
-9. **Availability** - PRN scheduling
-10. **Rules** - Scheduling constraints
-11. **Units** - Department configuration
-12. **Holidays** - Special days
-13. **Audit** - Change history
+1. **Setup** - Import data from Excel (first-time setup)
+2. **Dashboard** - Your starting point
+3. **Staff** - Who you're scheduling (click names for calendar view)
+4. **Schedule** - The main event (click issue badges for details)
+5. **Scenarios** - Options comparison
+6. **Callouts** - Handle absences
+7. **Coverage** - Review and approve replacement candidates
+8. **Leave** - Time-off requests (auto-creates open shifts when approved)
+9. **Swaps** - Shift trades
+10. **Availability** - PRN scheduling
+11. **Rules** - Scheduling constraints
+12. **Units** - Department configuration
+13. **Holidays** - Special days
+14. **Audit** - Change history
 
 Navigate using the sidebar, and you'll find what you need!
 

@@ -6,6 +6,154 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] - 2026-02-15
+
+### Summary
+
+This release adds an **Excel Import** feature that allows hospitals to bootstrap the system with their existing staff data from spreadsheets. Instead of manually entering each staff member, unit, and holiday, users can now upload a single Excel file to import everything at once.
+
+---
+
+### New Feature: Excel Data Import
+
+#### The Problem
+
+Hospitals typically have their staff information stored in Excel spreadsheets. Manually entering 30+ staff members through the UI is time-consuming and error-prone.
+
+#### The Solution
+
+A new **Setup** page (`/setup`) allows users to:
+
+1. **Download a template** - Pre-formatted Excel file with 3 sheets
+2. **Fill in their data** - Staff, Units, Holidays
+3. **Upload and validate** - System checks for errors before importing
+4. **Import with one click** - Deletes existing data and imports fresh
+
+---
+
+### Excel Template Format
+
+**Sheet 1: Staff**
+| Column | Required | Example |
+|--------|----------|---------|
+| First Name | Yes | Maria |
+| Last Name | Yes | Garcia |
+| Role | Yes | RN / LPN / CNA |
+| Employment Type | Yes | full_time / part_time / per_diem / float / agency |
+| FTE | No | 1.0 (default) |
+| Home Unit | No | ICU |
+| Cross-Trained Units | No | ER, Med-Surg (comma-separated) |
+| Competency Level | No | 1-5 (default 3) |
+| Charge Nurse Qualified | No | Yes / No |
+| Reliability Rating | No | 1-5 (default 3) |
+| Email | No | email@hospital.com |
+| Phone | No | 555-0101 |
+| Hire Date | No | YYYY-MM-DD |
+| Weekend Exempt | No | Yes / No |
+| VTO Available | No | Yes / No |
+| Notes | No | Free text |
+
+**Sheet 2: Units**
+| Column | Required | Example |
+|--------|----------|---------|
+| Name | Yes | ICU |
+| Description | No | Intensive Care Unit |
+| Min Staff Day | Yes | 4 |
+| Min Staff Night | Yes | 3 |
+| Weekend Shifts Required | No | 3 (default) |
+| Holiday Shifts Required | No | 1 (default) |
+
+**Sheet 3: Holidays**
+| Column | Required | Example |
+|--------|----------|---------|
+| Name | Yes | Christmas Day |
+| Date | Yes | 2026-12-25 |
+
+---
+
+### How It Works
+
+#### Step 1: Download Template
+- Click "Download Template" on the Setup page
+- Opens Excel file with example data
+- Three sheets: Staff, Units, Holidays
+
+#### Step 2: Fill In Your Data
+- Replace example rows with your actual data
+- Required fields must be filled
+- Optional fields can be left blank (defaults applied)
+
+#### Step 3: Upload and Validate
+- Drag and drop or click to upload
+- System parses and validates every row
+- Shows preview with counts:
+  - "28 Staff, 3 Units, 9 Holidays"
+- Displays any errors (must be fixed) or warnings (informational)
+
+#### Step 4: Import
+- Click "Import Data"
+- Confirmation dialog warns about data deletion
+- System deletes ALL existing data
+- Imports new data from Excel
+- Auto-creates: shift definitions, rules, census bands
+
+---
+
+### What Gets Imported
+
+**From Excel:**
+- Staff members (with auto-created preferences)
+- Units (with default configuration)
+- Holidays
+
+**Auto-Generated Defaults:**
+- Day Shift (7am-7pm, 12 hours)
+- Night Shift (7pm-7am, 12 hours)
+- 21 scheduling rules (13 hard, 8 soft)
+- Census bands for first unit
+
+---
+
+### Validation
+
+**Errors (block import):**
+- Missing required fields (First Name, Last Name, Role, etc.)
+- Invalid enum values (e.g., "Nurse" instead of "RN")
+- Invalid numbers (e.g., FTE > 1.0)
+
+**Warnings (informational):**
+- Missing optional fields (e.g., no email)
+- Missing sheets (e.g., no Holidays sheet)
+
+---
+
+### Files Added
+
+| File | Purpose |
+|------|---------|
+| `src/app/setup/page.tsx` | Setup page with upload UI |
+| `src/app/api/import/route.ts` | API for file processing |
+| `src/lib/import/parse-excel.ts` | Excel parsing and validation |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/components/layout/sidebar.tsx` | Added "Setup" link |
+| `package.json` | Added `xlsx` dependency |
+
+---
+
+### Dependencies Added
+
+```
+xlsx: ^0.18.5
+```
+
+The `xlsx` (SheetJS) library handles Excel file parsing in the browser and server.
+
+---
+
 ## [1.2.1] - 2026-02-15
 
 ### Summary

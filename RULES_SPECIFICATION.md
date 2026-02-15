@@ -408,6 +408,7 @@ The CAH Scheduler application provides the following pages for managing scheduli
 
 | Page | URL | Description |
 |------|-----|-------------|
+| **Setup** | `/setup` | Import data from Excel - upload staff, units, and holidays from a spreadsheet |
 | **Dashboard** | `/dashboard` | Overview of current schedule status, pending items, and key metrics |
 | **Staff** | `/staff` | Manage all staff members - add, edit, view competency levels, employment types, certifications |
 | **Schedule** | `/schedule` | View and edit the schedule grid, make assignments, see coverage |
@@ -436,24 +437,27 @@ The CAH Scheduler application provides the following pages for managing scheduli
 ### 11.4 Navigation
 
 All pages are accessible from the left sidebar. The navigation order is:
-1. Dashboard
-2. Staff
-3. Schedule
-4. Scenarios
-5. Callouts
-6. Coverage
-7. Leave
-8. Shift Swaps
-9. PRN Availability
-10. Rules
-11. Units
-12. Holidays
-13. Audit Trail
+1. Setup (Import Data)
+2. Dashboard
+3. Staff
+4. Schedule
+5. Scenarios
+6. Callouts
+7. Coverage
+8. Leave
+9. Shift Swaps
+10. PRN Availability
+11. Rules
+12. Units
+13. Holidays
+14. Audit Trail
 
 ### 11.5 Common Actions
 
 | Action | Where | How |
 |--------|-------|-----|
+| **Import Data from Excel** | `/setup` | Download template, fill with your data, upload, review preview, click "Import Data" |
+| **Download Excel Template** | `/setup` | Click "Download Template" to get pre-formatted spreadsheet |
 | **Approve/Deny Leave** | `/leave` | Click "Approve" or "Deny" button on pending requests. Approval auto-finds replacement candidates for affected assignments. |
 | **Approve Coverage** | `/open-shifts` | Click "Review" to see top 3 candidates with reasons, then click "Approve" on your choice |
 | **View Staff Calendar** | `/staff` | Click on a staff member's name to see their day-by-day calendar view |
