@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       originalAssignmentId: body.originalAssignmentId || null,
       reason: body.reason,
       reasonDetail: body.reasonDetail || null,
-      status: "open",
+      status: "pending_approval",
       priority: body.priority || "normal",
       notes: body.notes || null,
     })
