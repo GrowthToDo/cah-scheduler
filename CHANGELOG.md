@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.1] - 2026-02-15
+
+### Correction: Coverage Recommendations (Auto-Fill Workflow)
+
+Corrected the leave approval workflow based on clarification from Pradeep:
+
+**Previous (incorrect) behavior:**
+- Leave approved > 7 days out → Created "Open Shift" waiting for manual assignment
+
+**New (correct) behavior:**
+- Leave approved > 7 days out → System **automatically finds** top 3 replacement candidates → Presents to manager for approval → Manager approves → Assignment created automatically
+
+**Changes:**
+- Added `findCandidatesForShift()` algorithm in `src/lib/coverage/find-candidates.ts`
+- Follows escalation ladder: Float Pool → PRN → Overtime → Agency
+- Each candidate includes reasons (e.g., "Cross-trained for ICU", "High reliability rating")
+- Renamed sidebar "Open Shifts" to "Coverage"
+- Updated schema with `recommendations`, `escalationStepsChecked`, `selectedStaffId`, `selectedSource` fields
+- Updated Coverage page to show top 3 recommendations with approval workflow
+
+---
+
 ## [1.2.0] - 2026-02-15
 
 ### Overview

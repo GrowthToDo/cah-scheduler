@@ -10,7 +10,7 @@ const navItems = [
   { href: "/schedule", label: "Schedule", icon: "Calendar" },
   { href: "/scenarios", label: "Scenarios", icon: "GitBranch" },
   { href: "/callouts", label: "Callouts", icon: "PhoneOff" },
-  { href: "/open-shifts", label: "Open Shifts", icon: "CalendarPlus" },
+  { href: "/open-shifts", label: "Coverage", icon: "CalendarPlus" },
   { href: "/leave", label: "Leave", icon: "CalendarOff" },
   { href: "/swaps", label: "Shift Swaps", icon: "ArrowLeftRight" },
   { href: "/availability", label: "PRN Availability", icon: "ClipboardList" },

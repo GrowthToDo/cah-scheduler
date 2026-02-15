@@ -301,32 +301,42 @@ Over time, the system can identify patterns:
 
 ---
 
-## Open Shifts
+## Coverage Requests (Auto-Fill)
 
-An **open shift** is similar to a callout but planned in advance. When leave is approved ahead of time, the system creates an open shift instead of a callout.
+When leave is approved in advance, the system automatically finds replacement candidates and presents them for manager approval.
 
-### Callout vs. Open Shift
+### Callout vs. Coverage Request
 
-| Type | When Created | Urgency | Example |
-|------|--------------|---------|---------|
-| **Callout** | Last-minute (within 7 days) | High - need replacement ASAP | Staff calls in sick morning of shift |
-| **Open Shift** | Advance notice (beyond 7 days) | Normal - time to find coverage | Leave approved 3 weeks ahead |
+| Type | When Created | What Happens | Example |
+|------|--------------|--------------|---------|
+| **Callout** | Last-minute (within 7 days) | Follows manual escalation | Staff calls in sick morning of shift |
+| **Coverage Request** | Advance notice (beyond 7 days) | Auto-finds top 3 candidates | Leave approved 3 weeks ahead |
 
-### Automatic Creation from Leave Approval
+### Automatic Candidate Finding
 
-When a manager approves leave:
+When a manager approves leave (beyond threshold):
 1. System finds all affected shifts during leave dates
-2. For each shift within **callout threshold** (default: 7 days) → Creates **Callout**
-3. For each shift beyond threshold → Creates **Open Shift**
-4. Original assignments are cancelled automatically
+2. For each shift, automatically searches for replacement candidates:
+   - **Step 1:** Check Float Pool staff
+   - **Step 2:** Check PRN staff who marked the date as available
+   - **Step 3:** Check regular staff for overtime
+   - **Step 4:** Agency option (requires external contact)
+3. Top 3 candidates are presented with reasons
+4. Manager reviews and approves one candidate
+5. Assignment is created automatically
 
-### Open Shifts Page (`/open-shifts`)
+### Coverage Page (`/open-shifts`)
 
-This page shows all shifts needing coverage:
-- Filter by status: Open, Filled, Cancelled, All
-- See shift details, original staff, reason
-- **Fill** button assigns a replacement
-- **Cancel** removes from queue
+This page shows coverage requests with recommendations:
+- **Pending** tab: Requests waiting for manager approval
+- Each request shows the top recommended candidate
+- Click **Review** to see all 3 candidates with reasons
+- Approve a candidate to auto-assign them
+- Each candidate shows:
+  - Source (Float Pool, PRN, Overtime, Agency)
+  - Reasons (e.g., "Cross-trained for ICU", "High reliability")
+  - Whether it would be overtime
+  - Hours worked this week
 
 ---
 

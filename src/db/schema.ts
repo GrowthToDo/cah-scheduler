@@ -795,7 +795,8 @@ export const staffHolidayAssignment = sqliteTable(
 );
 
 // ============================================================
-// OPEN SHIFT (shifts needing coverage - for bidding)
+// COVERAGE REQUEST (shifts needing coverage with auto-recommendations)
+// Renamed from "open_shift" to better reflect the approval workflow
 // ============================================================
 export const openShift = sqliteTable(
   "open_shift",
@@ -816,18 +817,42 @@ export const openShift = sqliteTable(
     }).notNull(),
     reasonDetail: text("reason_detail"),
     status: text("status", {
-      enum: ["open", "filled", "cancelled"],
+      enum: ["pending_approval", "approved", "filled", "cancelled", "no_candidates"],
     })
       .notNull()
-      .default("open"),
+      .default("pending_approval"),
     priority: text("priority", {
       enum: ["low", "normal", "high", "urgent"],
     })
       .notNull()
       .default("normal"),
+    // Top 3 candidate recommendations with reasons
+    // Each candidate includes: staffId, name, source (float/prn/overtime/agency), reasons[], score
+    recommendations: text("recommendations", { mode: "json" })
+      .$type<{
+        staffId: string;
+        staffName: string;
+        source: "float" | "per_diem" | "overtime" | "agency";
+        reasons: string[];
+        score: number;
+        isOvertime: boolean;
+        hoursThisWeek: number;
+      }[]>()
+      .default([]),
+    // Which escalation steps were checked
+    escalationStepsChecked: text("escalation_steps_checked", { mode: "json" })
+      .$type<string[]>()
+      .default([]),
+    // Selected candidate (after manager approval)
+    selectedStaffId: text("selected_staff_id").references(() => staff.id),
+    selectedSource: text("selected_source", {
+      enum: ["float", "per_diem", "overtime", "agency"],
+    }),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
+    approvedAt: text("approved_at"),
+    approvedBy: text("approved_by"),
     filledAt: text("filled_at"),
     filledByStaffId: text("filled_by_staff_id").references(() => staff.id),
     filledByAssignmentId: text("filled_by_assignment_id").references(() => assignment.id),

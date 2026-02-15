@@ -27,12 +27,111 @@ export async function PUT(
   const existing = db.select().from(openShift).where(eq(openShift.id, id)).get();
 
   if (!existing) {
-    return NextResponse.json({ error: "Open shift not found" }, { status: 404 });
+    return NextResponse.json({ error: "Coverage request not found" }, { status: 404 });
   }
 
-  // If claiming/filling the shift
+  // ACTION: Approve a recommended candidate
+  // This is the main workflow - manager approves one of the top 3 recommendations
+  if (body.action === "approve" && body.selectedStaffId) {
+    const shiftRecord = db.select().from(shift).where(eq(shift.id, existing.shiftId)).get();
+
+    if (!shiftRecord) {
+      return NextResponse.json({ error: "Shift not found" }, { status: 404 });
+    }
+
+    // Find the selected candidate in recommendations to get their details
+    const recommendations = existing.recommendations as Array<{
+      staffId: string;
+      staffName: string;
+      source: "float" | "per_diem" | "overtime" | "agency";
+      isOvertime: boolean;
+    }> || [];
+
+    const selectedCandidate = recommendations.find(r => r.staffId === body.selectedStaffId);
+    const source = selectedCandidate?.source || body.source || "manual";
+    const isOvertime = selectedCandidate?.isOvertime || body.isOvertime || false;
+
+    // Handle agency selection differently - just mark as approved, no assignment
+    if (body.selectedStaffId === "agency") {
+      const updated = db
+        .update(openShift)
+        .set({
+          status: "approved",
+          selectedStaffId: null,
+          selectedSource: "agency",
+          approvedAt: new Date().toISOString(),
+          approvedBy: body.approvedBy || "nurse_manager",
+          notes: "Agency approved - awaiting agency confirmation",
+        })
+        .where(eq(openShift.id, id))
+        .returning()
+        .get();
+
+      db.insert(exceptionLog)
+        .values({
+          entityType: "open_shift",
+          entityId: id,
+          action: "open_shift_filled",
+          description: `Coverage approved for agency staff. Requires external agency contact.`,
+          previousState: { status: existing.status },
+          newState: { status: "approved", selectedSource: "agency" },
+          performedBy: body.approvedBy || "nurse_manager",
+        })
+        .run();
+
+      return NextResponse.json(updated);
+    }
+
+    // Create new assignment for the approved staff
+    const newAssignment = db
+      .insert(assignment)
+      .values({
+        shiftId: existing.shiftId,
+        staffId: body.selectedStaffId,
+        scheduleId: shiftRecord.scheduleId,
+        isChargeNurse: body.isChargeNurse ?? false,
+        isOvertime: isOvertime,
+        assignmentSource: source === "float" ? "float" : source === "overtime" ? "manual" : "callout_replacement",
+        notes: `Auto-filled from coverage request (original: ${existing.originalStaffId}, source: ${source})`,
+      })
+      .returning()
+      .get();
+
+    // Update coverage request as filled
+    const updated = db
+      .update(openShift)
+      .set({
+        status: "filled",
+        selectedStaffId: body.selectedStaffId,
+        selectedSource: source,
+        approvedAt: new Date().toISOString(),
+        approvedBy: body.approvedBy || "nurse_manager",
+        filledAt: new Date().toISOString(),
+        filledByStaffId: body.selectedStaffId,
+        filledByAssignmentId: newAssignment.id,
+      })
+      .where(eq(openShift.id, id))
+      .returning()
+      .get();
+
+    // Log the approval and fill
+    db.insert(exceptionLog)
+      .values({
+        entityType: "open_shift",
+        entityId: id,
+        action: "open_shift_filled",
+        description: `Coverage approved and filled by ${selectedCandidate?.staffName || body.selectedStaffId} (${source})`,
+        previousState: { status: existing.status },
+        newState: { status: "filled", filledByStaffId: body.selectedStaffId, source },
+        performedBy: body.approvedBy || "nurse_manager",
+      })
+      .run();
+
+    return NextResponse.json(updated);
+  }
+
+  // ACTION: Legacy fill (manual assignment without going through recommendations)
   if (body.action === "fill" && body.filledByStaffId) {
-    // Get shift info to get scheduleId
     const shiftRecord = db.select().from(shift).where(eq(shift.id, existing.shiftId)).get();
 
     if (!shiftRecord) {
@@ -49,12 +148,12 @@ export async function PUT(
         isChargeNurse: body.isChargeNurse ?? false,
         isOvertime: body.isOvertime ?? false,
         assignmentSource: "manual",
-        notes: `Filled from open shift (original: ${existing.originalStaffId})`,
+        notes: `Manually filled from coverage request (original: ${existing.originalStaffId})`,
       })
       .returning()
       .get();
 
-    // Update open shift as filled
+    // Update coverage request as filled
     const updated = db
       .update(openShift)
       .set({
@@ -73,7 +172,7 @@ export async function PUT(
         entityType: "open_shift",
         entityId: id,
         action: "open_shift_filled",
-        description: `Open shift filled by staff ${body.filledByStaffId}`,
+        description: `Coverage manually filled by staff ${body.filledByStaffId}`,
         previousState: { status: existing.status },
         newState: { status: "filled", filledByStaffId: body.filledByStaffId },
         performedBy: body.performedBy || "nurse_manager",
@@ -83,7 +182,7 @@ export async function PUT(
     return NextResponse.json(updated);
   }
 
-  // If cancelling the open shift
+  // ACTION: Cancel the coverage request
   if (body.action === "cancel") {
     const updated = db
       .update(openShift)
@@ -100,7 +199,7 @@ export async function PUT(
         entityType: "open_shift",
         entityId: id,
         action: "open_shift_cancelled",
-        description: `Open shift cancelled`,
+        description: `Coverage request cancelled`,
         previousState: { status: existing.status },
         newState: { status: "cancelled" },
         performedBy: body.performedBy || "nurse_manager",

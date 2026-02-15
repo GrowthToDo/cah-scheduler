@@ -4,7 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const openShifts = db
+  const coverageRequests = db
     .select({
       id: openShift.id,
       shiftId: openShift.shiftId,
@@ -14,7 +14,13 @@ export async function GET() {
       reasonDetail: openShift.reasonDetail,
       status: openShift.status,
       priority: openShift.priority,
+      recommendations: openShift.recommendations,
+      escalationStepsChecked: openShift.escalationStepsChecked,
+      selectedStaffId: openShift.selectedStaffId,
+      selectedSource: openShift.selectedSource,
       createdAt: openShift.createdAt,
+      approvedAt: openShift.approvedAt,
+      approvedBy: openShift.approvedBy,
       filledAt: openShift.filledAt,
       filledByStaffId: openShift.filledByStaffId,
       notes: openShift.notes,
@@ -38,7 +44,7 @@ export async function GET() {
     .orderBy(shift.date)
     .all();
 
-  return NextResponse.json(openShifts);
+  return NextResponse.json(coverageRequests);
 }
 
 export async function POST(request: Request) {

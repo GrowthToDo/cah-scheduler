@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -17,26 +17,35 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { format, parseISO } from "date-fns";
 
-interface OpenShiftData {
+interface CandidateRecommendation {
+  staffId: string;
+  staffName: string;
+  source: "float" | "per_diem" | "overtime" | "agency";
+  reasons: string[];
+  score: number;
+  isOvertime: boolean;
+  hoursThisWeek: number;
+}
+
+interface CoverageRequestData {
   id: string;
   shiftId: string;
   originalStaffId: string;
   reason: string;
   reasonDetail: string | null;
-  status: "open" | "filled" | "cancelled";
+  status: "pending_approval" | "approved" | "filled" | "cancelled" | "no_candidates";
   priority: "low" | "normal" | "high" | "urgent";
+  recommendations: CandidateRecommendation[];
+  escalationStepsChecked: string[];
+  selectedStaffId: string | null;
+  selectedSource: string | null;
   createdAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
   filledAt: string | null;
   filledByStaffId: string | null;
   shiftDate: string;
@@ -50,14 +59,6 @@ interface OpenShiftData {
   originalStaffLastName: string;
 }
 
-interface StaffMember {
-  id: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  isActive: boolean;
-}
-
 const PRIORITY_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   low: "secondary",
   normal: "outline",
@@ -65,33 +66,47 @@ const PRIORITY_VARIANTS: Record<string, "default" | "secondary" | "destructive" 
   urgent: "destructive",
 };
 
-const REASON_LABELS: Record<string, string> = {
-  leave_approved: "Leave Approved",
-  callout: "Callout",
-  schedule_change: "Schedule Change",
-  other: "Other",
+const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  pending_approval: "default",
+  approved: "secondary",
+  filled: "secondary",
+  cancelled: "outline",
+  no_candidates: "destructive",
 };
 
-export default function OpenShiftsPage() {
-  const [openShifts, setOpenShifts] = useState<OpenShiftData[]>([]);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+const STATUS_LABELS: Record<string, string> = {
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  filled: "Filled",
+  cancelled: "Cancelled",
+  no_candidates: "No Candidates",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  float: "Float Pool",
+  per_diem: "PRN",
+  overtime: "Overtime",
+  agency: "Agency",
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  float: "bg-blue-100 text-blue-800",
+  per_diem: "bg-green-100 text-green-800",
+  overtime: "bg-yellow-100 text-yellow-800",
+  agency: "bg-red-100 text-red-800",
+};
+
+export default function CoverageRequestsPage() {
+  const [requests, setRequests] = useState<CoverageRequestData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fillDialogOpen, setFillDialogOpen] = useState(false);
-  const [selectedOpenShift, setSelectedOpenShift] = useState<OpenShiftData | null>(null);
-  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
-  const [filter, setFilter] = useState<"all" | "open" | "filled" | "cancelled">("open");
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<CoverageRequestData | null>(null);
+  const [filter, setFilter] = useState<"pending_approval" | "filled" | "cancelled" | "all">("pending_approval");
 
   const fetchData = useCallback(async () => {
-    const [shiftsRes, staffRes] = await Promise.all([
-      fetch("/api/open-shifts"),
-      fetch("/api/staff"),
-    ]);
-    const [shiftsData, staffData] = await Promise.all([
-      shiftsRes.json(),
-      staffRes.json(),
-    ]);
-    setOpenShifts(shiftsData);
-    setStaff(staffData.filter((s: StaffMember) => s.isActive));
+    const res = await fetch("/api/open-shifts");
+    const data = await res.json();
+    setRequests(data);
     setLoading(false);
   }, []);
 
@@ -99,34 +114,32 @@ export default function OpenShiftsPage() {
     fetchData();
   }, [fetchData]);
 
-  function handleFillClick(openShift: OpenShiftData) {
-    setSelectedOpenShift(openShift);
-    setSelectedStaffId("");
-    setFillDialogOpen(true);
+  function handleApproveClick(request: CoverageRequestData) {
+    setSelectedRequest(request);
+    setApproveDialogOpen(true);
   }
 
-  async function handleFillSubmit() {
-    if (!selectedOpenShift || !selectedStaffId) return;
+  async function handleApproveCandidate(candidateStaffId: string) {
+    if (!selectedRequest) return;
 
-    await fetch(`/api/open-shifts/${selectedOpenShift.id}`, {
+    await fetch(`/api/open-shifts/${selectedRequest.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "fill",
-        filledByStaffId: selectedStaffId,
+        action: "approve",
+        selectedStaffId: candidateStaffId,
       }),
     });
 
-    setFillDialogOpen(false);
-    setSelectedOpenShift(null);
-    setSelectedStaffId("");
+    setApproveDialogOpen(false);
+    setSelectedRequest(null);
     fetchData();
   }
 
-  async function handleCancel(openShiftId: string) {
-    if (!confirm("Are you sure you want to cancel this open shift?")) return;
+  async function handleCancel(requestId: string) {
+    if (!confirm("Are you sure you want to cancel this coverage request?")) return;
 
-    await fetch(`/api/open-shifts/${openShiftId}`, {
+    await fetch(`/api/open-shifts/${requestId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "cancel" }),
@@ -135,37 +148,38 @@ export default function OpenShiftsPage() {
     fetchData();
   }
 
-  const filteredShifts = openShifts.filter((s) => {
+  const filteredRequests = requests.filter((r) => {
     if (filter === "all") return true;
-    return s.status === filter;
+    if (filter === "pending_approval") return r.status === "pending_approval" || r.status === "no_candidates";
+    return r.status === filter;
   });
 
-  const openCount = openShifts.filter((s) => s.status === "open").length;
+  const pendingCount = requests.filter((r) => r.status === "pending_approval" || r.status === "no_candidates").length;
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Open Shifts</h1>
+          <h1 className="text-2xl font-bold">Coverage Requests</h1>
           <p className="mt-1 text-muted-foreground">
-            {openCount} open shift{openCount !== 1 ? "s" : ""} available for pickup
+            {pendingCount} request{pendingCount !== 1 ? "s" : ""} pending approval
           </p>
         </div>
       </div>
 
       {/* Filter tabs */}
       <div className="mb-4 flex gap-2">
-        {(["open", "filled", "cancelled", "all"] as const).map((status) => (
+        {(["pending_approval", "filled", "cancelled", "all"] as const).map((status) => (
           <Button
             key={status}
             variant={filter === status ? "default" : "outline"}
             size="sm"
             onClick={() => setFilter(status)}
           >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-            {status === "open" && openCount > 0 && (
+            {status === "pending_approval" ? "Pending" : status.charAt(0).toUpperCase() + status.slice(1)}
+            {status === "pending_approval" && pendingCount > 0 && (
               <Badge variant="secondary" className="ml-2">
-                {openCount}
+                {pendingCount}
               </Badge>
             )}
           </Button>
@@ -174,14 +188,17 @@ export default function OpenShiftsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Available Shifts</CardTitle>
+          <CardTitle>Coverage Recommendations</CardTitle>
+          <CardDescription>
+            Review and approve replacement candidates for shifts needing coverage
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-muted-foreground">Loading...</p>
-          ) : filteredShifts.length === 0 ? (
+          ) : filteredRequests.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
-              No {filter !== "all" ? filter : ""} shifts found.
+              No {filter !== "all" ? filter.replace("_", " ") : ""} coverage requests found.
             </p>
           ) : (
             <Table>
@@ -191,124 +208,174 @@ export default function OpenShiftsPage() {
                   <TableHead>Shift</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Original Staff</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead>Top Recommendation</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredShifts.map((os) => (
-                  <TableRow key={os.id}>
-                    <TableCell className="font-medium">
-                      {format(parseISO(os.shiftDate), "EEE, MMM d")}
-                    </TableCell>
-                    <TableCell>
-                      <div>{os.shiftName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {os.startTime} - {os.endTime}
-                      </div>
-                    </TableCell>
-                    <TableCell>{os.unit}</TableCell>
-                    <TableCell>
-                      {os.originalStaffFirstName} {os.originalStaffLastName}
-                    </TableCell>
-                    <TableCell>
-                      <div>{REASON_LABELS[os.reason] || os.reason}</div>
-                      {os.reasonDetail && (
-                        <div className="text-xs text-muted-foreground truncate max-w-[150px]">
-                          {os.reasonDetail}
+                {filteredRequests.map((req) => {
+                  const topCandidate = req.recommendations?.[0];
+                  return (
+                    <TableRow key={req.id}>
+                      <TableCell className="font-medium">
+                        {format(parseISO(req.shiftDate), "EEE, MMM d")}
+                      </TableCell>
+                      <TableCell>
+                        <div>{req.shiftName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {req.startTime} - {req.endTime}
                         </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={PRIORITY_VARIANTS[os.priority]}>
-                        {os.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          os.status === "open"
-                            ? "default"
-                            : os.status === "filled"
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {os.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {os.status === "open" && (
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            onClick={() => handleFillClick(os)}
-                          >
-                            Fill
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleCancel(os.id)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>{req.unit}</TableCell>
+                      <TableCell>
+                        {req.originalStaffFirstName} {req.originalStaffLastName}
+                      </TableCell>
+                      <TableCell>
+                        {topCandidate ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{topCandidate.staffName}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded ${SOURCE_COLORS[topCandidate.source]}`}>
+                                {SOURCE_LABELS[topCandidate.source]}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {topCandidate.reasons[0]}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic">No candidates found</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={PRIORITY_VARIANTS[req.priority]}>
+                          {req.priority}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={STATUS_VARIANTS[req.status]}>
+                          {STATUS_LABELS[req.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(req.status === "pending_approval" || req.status === "no_candidates") && (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApproveClick(req)}
+                              disabled={!req.recommendations?.length}
+                            >
+                              Review
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCancel(req.id)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
 
-      {/* Fill shift dialog */}
-      <Dialog open={fillDialogOpen} onOpenChange={setFillDialogOpen}>
-        <DialogContent>
+      {/* Approval Dialog with Candidate Selection */}
+      <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Fill Open Shift</DialogTitle>
+            <DialogTitle>Approve Coverage</DialogTitle>
+            <DialogDescription>
+              Select a replacement candidate to fill this shift
+            </DialogDescription>
           </DialogHeader>
-          {selectedOpenShift && (
+          {selectedRequest && (
             <div className="space-y-4">
-              <div className="rounded-lg border p-3 text-sm">
+              {/* Shift Info */}
+              <div className="rounded-lg border p-3 text-sm bg-muted/50">
                 <p>
                   <strong>Date:</strong>{" "}
-                  {format(parseISO(selectedOpenShift.shiftDate), "EEEE, MMMM d, yyyy")}
+                  {format(parseISO(selectedRequest.shiftDate), "EEEE, MMMM d, yyyy")}
                 </p>
                 <p>
-                  <strong>Shift:</strong> {selectedOpenShift.shiftName} ({selectedOpenShift.startTime} - {selectedOpenShift.endTime})
+                  <strong>Shift:</strong> {selectedRequest.shiftName} ({selectedRequest.startTime} - {selectedRequest.endTime})
                 </p>
                 <p>
-                  <strong>Unit:</strong> {selectedOpenShift.unit}
+                  <strong>Unit:</strong> {selectedRequest.unit}
+                </p>
+                <p>
+                  <strong>Original Staff:</strong> {selectedRequest.originalStaffFirstName} {selectedRequest.originalStaffLastName}
+                </p>
+                <p>
+                  <strong>Reason:</strong> {selectedRequest.reasonDetail || selectedRequest.reason}
                 </p>
               </div>
 
-              <div>
-                <Label>Assign to Staff Member</Label>
-                <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select staff member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staff.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.firstName} {s.lastName} ({s.role})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Escalation Steps */}
+              <div className="text-sm text-muted-foreground">
+                <strong>Checked:</strong> {selectedRequest.escalationStepsChecked?.map(s => SOURCE_LABELS[s] || s).join(" → ")}
               </div>
 
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setFillDialogOpen(false)}>
+              {/* Candidate Recommendations */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Top 3 Recommendations</h4>
+                {selectedRequest.recommendations?.map((candidate, index) => (
+                  <div
+                    key={candidate.staffId}
+                    className="rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold">
+                            {index + 1}. {candidate.staffName}
+                          </span>
+                          <span className={`text-xs px-2 py-1 rounded font-medium ${SOURCE_COLORS[candidate.source]}`}>
+                            {SOURCE_LABELS[candidate.source]}
+                          </span>
+                          {candidate.isOvertime && (
+                            <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                              OT
+                            </Badge>
+                          )}
+                        </div>
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {candidate.reasons.map((reason, i) => (
+                            <li key={i} className="flex items-center gap-2">
+                              <span className="text-green-600">✓</span>
+                              {reason}
+                            </li>
+                          ))}
+                        </ul>
+                        {candidate.staffId !== "agency" && (
+                          <p className="text-xs text-muted-foreground">
+                            Hours this week: {candidate.hoursThisWeek}h
+                            {candidate.isOvertime && ` (+${selectedRequest.durationHours}h = overtime)`}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        onClick={() => handleApproveCandidate(candidate.staffId)}
+                        variant={index === 0 ? "default" : "outline"}
+                      >
+                        {candidate.staffId === "agency" ? "Contact Agency" : "Approve"}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>
                   Cancel
-                </Button>
-                <Button onClick={handleFillSubmit} disabled={!selectedStaffId}>
-                  Assign Shift
                 </Button>
               </div>
             </div>

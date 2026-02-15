@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { staffLeave, exceptionLog, assignment, shift, schedule, unit, openShift, callout } from "@/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { findCandidatesForShift } from "@/lib/coverage/find-candidates";
 
 export async function GET(
   _request: Request,
@@ -80,9 +81,9 @@ export async function PUT(
 }
 
 /**
- * When leave is approved, find affected assignments and create open shifts or callouts.
- * - If shift is within callout threshold days: create callout (urgent)
- * - If shift is beyond threshold: create open shift (for bidding)
+ * When leave is approved, find affected assignments and handle coverage:
+ * - If shift is within callout threshold days: create callout (urgent - follow escalation)
+ * - If shift is beyond threshold: find top 3 replacement candidates and present for approval
  */
 async function handleLeaveApproval(staffId: string, startDate: string, endDate: string) {
   const today = new Date();
@@ -134,6 +135,7 @@ async function handleLeaveApproval(staffId: string, startDate: string, endDate: 
 
     if (daysUntilShift <= calloutThreshold) {
       // Create callout (urgent - within threshold)
+      // This follows the existing escalation workflow
       db.insert(callout)
         .values({
           assignmentId: a.assignmentId,
@@ -156,26 +158,43 @@ async function handleLeaveApproval(staffId: string, startDate: string, endDate: 
         })
         .run();
     } else {
-      // Create open shift (for bidding - beyond threshold)
-      db.insert(openShift)
+      // Beyond threshold: Auto-find replacement candidates
+      const { candidates, escalationStepsChecked } = await findCandidatesForShift(
+        a.shiftId,
+        staffId // Exclude the staff going on leave
+      );
+
+      // Determine status based on whether we found candidates
+      const hasRealCandidates = candidates.some(c => c.staffId !== "agency");
+      const status = hasRealCandidates ? "pending_approval" : "no_candidates";
+
+      // Create coverage request with recommendations
+      const newCoverageRequest = db.insert(openShift)
         .values({
           shiftId: a.shiftId,
           originalStaffId: staffId,
           originalAssignmentId: a.assignmentId,
           reason: "leave_approved",
-          reasonDetail: `Leave approved - shift available for pickup`,
-          status: "open",
+          reasonDetail: `Leave approved - ${candidates.length > 0 ? "replacement candidates found" : "no candidates available"}`,
+          status: status,
           priority: daysUntilShift > 14 ? "low" : "normal",
+          recommendations: candidates,
+          escalationStepsChecked: escalationStepsChecked,
         })
-        .run();
+        .returning()
+        .get();
 
-      // Log the open shift creation
+      // Log the coverage request creation
       db.insert(exceptionLog)
         .values({
           entityType: "open_shift",
-          entityId: a.shiftId,
+          entityId: newCoverageRequest?.id || a.shiftId,
           action: "open_shift_created",
-          description: `Open shift created due to approved leave for staff ${staffId}, shift on ${a.shiftDate}`,
+          description: `Coverage request created for shift on ${a.shiftDate}. Found ${candidates.length} candidate(s). Status: ${status}`,
+          newState: {
+            candidates: candidates.map(c => ({ staffId: c.staffId, name: c.staffName, source: c.source })),
+            escalationStepsChecked,
+          },
           performedBy: "system",
         })
         .run();

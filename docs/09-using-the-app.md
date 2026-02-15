@@ -154,31 +154,41 @@ When you click a staff member's **name** (not the edit button), a calendar opens
 
 ---
 
-## Open Shifts (`/open-shifts`)
+## Coverage (`/open-shifts`)
 
-**Purpose:** View and manage shifts that need coverage.
+**Purpose:** Review and approve replacement candidates for shifts needing coverage.
 
 ### What You'll See
 
-- **Shift List** - All open, filled, and cancelled open shifts
-- **Filter Tabs** - Open, Filled, Cancelled, All
-- **Shift Details** - Date, time, unit, original staff, reason, priority
-- **Status Badges** - Current state of each open shift
+- **Coverage Requests** - Shifts that need replacements with auto-found candidates
+- **Filter Tabs** - Pending, Filled, Cancelled, All
+- **Top Recommendation** - The best candidate for each shift
+- **Status Badges** - Pending Approval, Filled, Cancelled, No Candidates
 
 ### Common Tasks
 
 | Task | How To |
 |------|--------|
-| See shifts needing coverage | Click "Open" filter tab |
-| Fill an open shift | Click "Fill" button, select staff member |
-| Cancel an open shift | Click "Cancel" button |
-| View all history | Click "All" filter tab |
+| See requests needing approval | Click "Pending" filter tab |
+| Review candidates | Click "Review" button to see top 3 candidates |
+| Approve a candidate | Click "Approve" next to your choice |
+| Cancel a request | Click "Cancel" button |
 
-### How Open Shifts Are Created
+### Approval Workflow
 
-Open shifts are created automatically when:
 1. Leave is approved for dates with existing assignments
-2. A callout is logged (within threshold days, it becomes a callout instead)
+2. System automatically finds top 3 replacement candidates
+3. Manager clicks "Review" to see all candidates with reasons
+4. Manager clicks "Approve" on their choice
+5. Assignment is created automatically
+
+### Candidate Sources
+
+Candidates are found in this order (escalation ladder):
+1. **Float Pool** - Staff designated for floating (highest priority)
+2. **PRN** - Per diem staff who marked the date as available
+3. **Overtime** - Regular staff who could work extra
+4. **Agency** - External staffing (requires phone call)
 
 ---
 
@@ -477,7 +487,7 @@ The application is organized around your workflow:
 3. **Schedule** - The main event (click issue badges for details)
 4. **Scenarios** - Options comparison
 5. **Callouts** - Handle absences
-6. **Open Shifts** - Fill coverage needs
+6. **Coverage** - Review and approve replacement candidates
 7. **Leave** - Time-off requests (auto-creates open shifts when approved)
 8. **Swaps** - Shift trades
 9. **Availability** - PRN scheduling
