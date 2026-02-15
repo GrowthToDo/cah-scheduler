@@ -8,23 +8,188 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.2.1] - 2026-02-15
 
-### Correction: Coverage Recommendations (Auto-Fill Workflow)
+### Summary
 
-Corrected the leave approval workflow based on clarification from Pradeep:
+This release corrects the leave approval workflow based on expert feedback from Pradeep. The key change is that the system now **automatically finds and recommends replacement candidates** instead of creating open shifts that wait for manual assignment.
 
-**Previous (incorrect) behavior:**
-- Leave approved > 7 days out → Created "Open Shift" waiting for manual assignment
+---
 
-**New (correct) behavior:**
-- Leave approved > 7 days out → System **automatically finds** top 3 replacement candidates → Presents to manager for approval → Manager approves → Assignment created automatically
+### What Changed: Coverage Auto-Fill Workflow
 
-**Changes:**
-- Added `findCandidatesForShift()` algorithm in `src/lib/coverage/find-candidates.ts`
-- Follows escalation ladder: Float Pool → PRN → Overtime → Agency
-- Each candidate includes reasons (e.g., "Cross-trained for ICU", "High reliability rating")
-- Renamed sidebar "Open Shifts" to "Coverage"
-- Updated schema with `recommendations`, `escalationStepsChecked`, `selectedStaffId`, `selectedSource` fields
-- Updated Coverage page to show top 3 recommendations with approval workflow
+#### The Problem with v1.2.0
+
+In v1.2.0, when leave was approved more than 7 days before a shift, the system created an "Open Shift" record. The manager then had to:
+1. Go to the Open Shifts page
+2. Manually search for available staff
+3. Evaluate each candidate
+4. Assign someone
+
+This was still a manual, time-consuming process.
+
+#### The Solution in v1.2.1
+
+Now, when leave is approved more than 7 days before a shift:
+
+1. **System automatically searches** for replacement candidates
+2. **Follows the escalation ladder**: Float Pool → PRN → Overtime → Agency
+3. **Ranks candidates** by suitability (qualifications, availability, fairness)
+4. **Presents top 3 candidates** with explanatory reasons
+5. **Manager reviews and clicks "Approve"**
+6. **Assignment is created automatically**
+
+---
+
+### How the Candidate Finding Algorithm Works
+
+The new `findCandidatesForShift()` function in `src/lib/coverage/find-candidates.ts`:
+
+#### Step 1: Check Float Pool Staff
+- Queries all active float pool staff
+- Checks each for availability on the shift date
+- Verifies they're qualified for the unit (home unit or cross-trained)
+- Calculates hours this week to determine overtime
+
+#### Step 2: Check PRN Staff
+- Queries all active PRN (per diem) staff
+- Only considers those who **marked this date as available**
+- Verifies unit qualification
+- Checks all scheduling rules (rest time, 60-hour limit, etc.)
+
+#### Step 3: Check Regular Staff for Overtime
+- Queries full-time and part-time staff
+- Identifies those not already scheduled
+- Calculates if this would push them into overtime (>40 hours)
+- Considers flex hours YTD for fairness
+
+#### Step 4: Agency Option
+- Always included as a fallback
+- Marked as "requires external contact"
+- Lowest priority score (last resort)
+
+#### Ranking Criteria
+
+Each candidate receives a score based on:
+
+| Factor | Score Impact |
+|--------|--------------|
+| **Source Priority** | Float (100) > PRN (80) > OT (60) > Agency (10) |
+| **Unit Match** | Home unit (+10) > Cross-trained (+0) |
+| **Competency Level** | Higher level = higher score |
+| **Reliability Rating** | 5/5 = +15, 1/5 = +3 |
+| **Overtime** | Non-OT preferred (+15 if within 40h) |
+| **Flex Hours YTD** | Lower flex hours = higher score (fairness) |
+
+#### Reasons Provided
+
+Each candidate includes human-readable reasons. Examples:
+
+**Float Pool Candidate:**
+- "Float pool staff - designed for coverage"
+- "Cross-trained for ICU"
+- "Competency Level 4 (Proficient)"
+- "Reliability rating: 5/5"
+
+**PRN Candidate:**
+- "PRN staff - marked available for this date"
+- "Home unit is ICU"
+- "High reliability rating (4/5)"
+
+**Overtime Candidate:**
+- "Would be overtime (OT pay applies)"
+- "Cross-trained for ICU"
+- "Low flex hours YTD (fair distribution)"
+
+---
+
+### UI Changes
+
+#### Sidebar Navigation
+- Renamed: "Open Shifts" → **"Coverage"**
+- Same URL: `/open-shifts`
+
+#### Coverage Page (`/open-shifts`)
+
+**Before (v1.2.0):**
+- Table with open shifts
+- "Fill" button opened a dialog to manually select staff
+- No recommendations
+
+**After (v1.2.1):**
+- Table shows pending coverage requests
+- "Top Recommendation" column shows best candidate
+- "Review" button opens detailed view with top 3 candidates
+- Each candidate shows:
+  - Name and source (Float Pool, PRN, Overtime, Agency)
+  - Color-coded badge (blue for Float, green for PRN, etc.)
+  - List of reasons with checkmarks
+  - Hours this week + overtime indicator
+- "Approve" button next to each candidate
+- Clicking "Approve" creates the assignment automatically
+
+---
+
+### Database Schema Changes
+
+**Modified `open_shift` table:**
+
+| New Column | Type | Purpose |
+|------------|------|---------|
+| `recommendations` | JSON | Stores top 3 candidates with reasons |
+| `escalation_steps_checked` | JSON | Array of sources checked (e.g., ["float", "per_diem", "overtime"]) |
+| `selected_staff_id` | TEXT | Staff ID chosen by manager |
+| `selected_source` | TEXT | Source of chosen staff (float, per_diem, overtime, agency) |
+| `approved_at` | TEXT | Timestamp of approval |
+| `approved_by` | TEXT | Who approved |
+
+**Modified `status` enum:**
+- Old: `open`, `filled`, `cancelled`
+- New: `pending_approval`, `approved`, `filled`, `cancelled`, `no_candidates`
+
+---
+
+### API Changes
+
+#### `PUT /api/open-shifts/[id]`
+
+**New action: `approve`**
+
+```json
+{
+  "action": "approve",
+  "selectedStaffId": "staff-uuid-here"
+}
+```
+
+Response:
+- Creates assignment automatically
+- Updates coverage request status to "filled"
+- Logs audit trail entry
+
+---
+
+### Files Added/Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/coverage/find-candidates.ts` | **NEW** - Candidate finding algorithm |
+| `src/db/schema.ts` | Added new fields to `open_shift` table |
+| `src/app/api/staff-leave/[id]/route.ts` | Calls `findCandidatesForShift()` on approval |
+| `src/app/api/open-shifts/route.ts` | Returns recommendation fields |
+| `src/app/api/open-shifts/[id]/route.ts` | Added `approve` action |
+| `src/app/open-shifts/page.tsx` | Complete rewrite for approval workflow |
+| `src/components/layout/sidebar.tsx` | Renamed to "Coverage" |
+
+---
+
+### Testing the New Workflow
+
+1. **Create a staff member with scheduled shifts** (at least 8+ days out)
+2. **Approve leave** that covers one of those shift dates
+3. **Go to Coverage page** (`/open-shifts`)
+4. **Verify** the request shows "Pending Approval" status
+5. **Click "Review"** to see top 3 candidates with reasons
+6. **Click "Approve"** on your chosen candidate
+7. **Verify** the assignment was created in the schedule
 
 ---
 

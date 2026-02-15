@@ -1,6 +1,6 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.2
+**Document Version:** 1.2.1
 **Last Updated:** February 15, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
@@ -267,27 +267,75 @@ Census bands define staffing requirements based on patient count:
 
 ---
 
-## 7. Escalation & Callout Workflow
+## 7. Escalation & Coverage Workflow
 
-When a callout occurs (staff calls in sick, etc.), the system follows an escalation sequence to find a replacement:
+The system handles coverage needs differently based on timing:
 
-### Default Escalation Sequence:
+### 7.1 Callouts (Urgent - Within 7 Days)
+
+When a staff member calls out or leave is approved within the callout threshold (default: 7 days), the system creates a **Callout** record. The manager follows the escalation sequence manually.
+
+**Default Escalation Sequence:**
 1. **Float Pool** - Check if float staff are available
 2. **Per Diem (PRN)** - Contact available per diem staff
 3. **Overtime** - Offer overtime to regular staff
 4. **Agency** - Call agency as last resort
 
-### Callout Reasons Tracked:
+**Callout Reasons Tracked:**
 - Sick
 - Family Emergency
 - Personal
 - No Show
 - Other
 
-### Callout Statuses:
+**Callout Statuses:**
 - **Open** - Not yet filled
 - **Filled** - Replacement found
 - **Unfilled Approved** - Approved to run short-staffed
+
+### 7.2 Coverage Requests (Advance Notice - Beyond 7 Days) *(NEW in v1.2.1)*
+
+When leave is approved more than 7 days before the shift, the system **automatically finds replacement candidates** and presents them for manager approval.
+
+**Automatic Candidate Finding Process:**
+1. System searches for available staff following the escalation ladder
+2. For each potential candidate, the system checks:
+   - Availability (not on leave, not already assigned)
+   - Qualifications (unit, competency level)
+   - Hours worked this week (overtime check)
+   - Rest requirements (10-hour minimum)
+   - 60-hour weekly limit
+3. Top 3 candidates are ranked and presented with reasons
+
+**Candidate Ranking Criteria:**
+| Source | Priority Score | Notes |
+|--------|---------------|-------|
+| Float Pool | Highest (100+) | Designed for coverage |
+| PRN (Available) | High (80+) | Marked date as available |
+| Regular Staff (OT) | Medium (60+) | Overtime may apply |
+| Agency | Lowest (10) | External, highest cost |
+
+**Within each source, candidates are ranked by:**
+- Unit qualification (home unit > cross-trained)
+- Competency level (higher = better)
+- Reliability rating (1-5 scale)
+- Flex hours YTD (lower = fairer distribution)
+
+**Reasons Provided for Each Candidate:**
+Each candidate recommendation includes explanatory reasons such as:
+- "Float pool staff - designed for coverage"
+- "Cross-trained for ICU"
+- "PRN staff - marked available for this date"
+- "High reliability rating (5/5)"
+- "No overtime (within 40 hours)"
+- "Low flex hours YTD (fair distribution)"
+
+**Coverage Request Statuses:**
+- **Pending Approval** - Waiting for manager to select a candidate
+- **Approved** - Manager approved, assignment created
+- **Filled** - Assignment confirmed and active
+- **Cancelled** - Request cancelled
+- **No Candidates** - No suitable candidates found (manual intervention needed)
 
 ---
 
@@ -365,15 +413,15 @@ The CAH Scheduler application provides the following pages for managing scheduli
 | **Schedule** | `/schedule` | View and edit the schedule grid, make assignments, see coverage |
 | **Scenarios** | `/scenarios` | Compare different scheduling scenarios and their scores |
 | **Callouts** | `/callouts` | Log and manage staff callouts, track replacements and escalation |
-| **Open Shifts** | `/open-shifts` | View and manage shifts that need coverage - from approved leave or callouts |
+| **Coverage** | `/open-shifts` | Review and approve replacement candidates for shifts needing coverage (auto-recommended by system) |
 | **Audit Trail** | `/audit` | View all changes made to the system with timestamps and details |
 
 ### 11.2 Request Management Pages
 
 | Page | URL | Description |
 |------|-----|-------------|
-| **Leave Management** | `/leave` | View, approve, or deny leave requests (vacation, sick, maternity, etc.). Create new leave requests for staff. Filter by status: All, Pending, Approved, Denied. **When leave is approved, affected shifts automatically become open shifts or callouts.** |
-| **Open Shifts** | `/open-shifts` | View shifts needing coverage (from leave or callouts). Filter by status: Open, Filled, Cancelled. Fill shifts by assigning staff. Shows original staff, reason, priority, and shift details. |
+| **Leave Management** | `/leave` | View, approve, or deny leave requests (vacation, sick, maternity, etc.). Create new leave requests for staff. Filter by status: All, Pending, Approved, Denied. **When leave is approved, affected shifts automatically have replacement candidates found.** |
+| **Coverage** | `/open-shifts` | Review auto-recommended replacement candidates for shifts needing coverage. Shows top 3 candidates with reasons. Manager approves one candidate to auto-create the assignment. Filter by: Pending, Filled, Cancelled, All. |
 | **Shift Swaps** | `/swaps` | View, approve, or deny shift swap requests between staff. Shows requesting staff, their shift, target staff, and target shift. |
 | **PRN Availability** | `/availability` | View per-diem (PRN) staff availability submissions. See which dates each PRN staff is available. Highlights staff who haven't submitted availability yet. |
 
@@ -393,7 +441,7 @@ All pages are accessible from the left sidebar. The navigation order is:
 3. Schedule
 4. Scenarios
 5. Callouts
-6. Open Shifts
+6. Coverage
 7. Leave
 8. Shift Swaps
 9. PRN Availability
@@ -406,8 +454,8 @@ All pages are accessible from the left sidebar. The navigation order is:
 
 | Action | Where | How |
 |--------|-------|-----|
-| **Approve/Deny Leave** | `/leave` | Click "Approve" or "Deny" button on pending requests. Approval auto-creates open shifts or callouts for affected assignments. |
-| **Fill Open Shift** | `/open-shifts` | Click "Fill" button, select staff member to assign |
+| **Approve/Deny Leave** | `/leave` | Click "Approve" or "Deny" button on pending requests. Approval auto-finds replacement candidates for affected assignments. |
+| **Approve Coverage** | `/open-shifts` | Click "Review" to see top 3 candidates with reasons, then click "Approve" on your choice |
 | **View Staff Calendar** | `/staff` | Click on a staff member's name to see their day-by-day calendar view |
 | **Approve/Deny Swap** | `/swaps` | Click "Approve" or "Deny" button on pending swap requests |
 | **Create Leave Request** | `/leave` | Click "New Leave Request" button, fill form |
@@ -443,7 +491,8 @@ Please review each section and note any changes needed:
 |---------|------|---------|
 | 1.0 | Feb 2026 | Initial document with all rules and configuration options |
 | 1.1 | Feb 13, 2026 | Added Section 11 (Application UI Guide) documenting all available pages: Leave Management, Shift Swaps, PRN Availability, Unit Configuration, and Holidays Management |
-| 1.2 | Feb 15, 2026 | **Major updates based on expert feedback:** (1) Holiday fairness now tracks annually, Christmas Eve/Day merged as one holiday; (2) Low census order updated - removed Agency, added Voluntary Time Off (VTO); (3) Added Open Shifts page for managing shifts needing coverage; (4) Leave approval now auto-creates open shifts or callouts for affected assignments; (5) Staff page now shows clickable calendar view for each staff member; (6) Added callout threshold days configuration |
+| 1.2 | Feb 15, 2026 | **Major updates based on expert feedback:** (1) Holiday fairness now tracks annually, Christmas Eve/Day merged as one holiday; (2) Low census order updated - removed Agency, added Voluntary Time Off (VTO); (3) Added Coverage page for managing shifts needing coverage; (4) Leave approval now auto-creates coverage requests for affected assignments; (5) Staff page now shows clickable calendar view for each staff member; (6) Added callout threshold days configuration |
+| 1.2.1 | Feb 15, 2026 | **Coverage auto-fill workflow:** Leave approval (> 7 days) now automatically finds top 3 replacement candidates instead of creating manual open shifts. Each candidate includes reasons (e.g., "Cross-trained for ICU", "High reliability"). Manager reviews and approves, assignment is auto-created. Renamed "Open Shifts" to "Coverage" in navigation. |
 
 ---
 

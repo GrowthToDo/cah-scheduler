@@ -57,9 +57,64 @@ those days resubmit)
 
 ### What Happens When Leave Is Approved?
 
-1. **The dates are blocked** - Staff cannot be scheduled during this period
-2. **Shift gaps identified** - Manager sees where coverage is needed
-3. **Coverage planned** - Other staff or PRN fill the gaps
+When a manager approves leave, the system **automatically handles affected shifts**:
+
+#### If Leave is Far in Advance (> 7 days)
+
+The system finds replacement candidates automatically:
+
+```
+Leave Approved
+      ↓
+Find all shifts during leave dates
+      ↓
+For each shift:
+  1. Search Float Pool staff
+  2. Search PRN staff (who marked date as available)
+  3. Search Regular staff for overtime
+  4. Include Agency as fallback
+      ↓
+Rank candidates by suitability
+      ↓
+Present top 3 candidates with reasons
+      ↓
+Manager approves one → Assignment created!
+```
+
+**What the manager sees:**
+- Go to Coverage page (`/open-shifts`)
+- See "Pending Approval" requests
+- Click "Review" to see top 3 candidates
+- Each candidate shows reasons like:
+  - "Float pool staff - designed for coverage"
+  - "PRN staff - marked available for this date"
+  - "Would be overtime (OT pay applies)"
+  - "High reliability rating (4/5)"
+- Click "Approve" on chosen candidate
+- Assignment is created automatically
+
+#### If Leave is Last-Minute (≤ 7 days)
+
+This is treated as a **callout** situation:
+
+```
+Leave Approved
+      ↓
+Find all shifts during leave dates
+      ↓
+Create callout records (urgent)
+      ↓
+Manager follows escalation sequence manually
+```
+
+The 7-day threshold can be configured per unit.
+
+#### Summary
+
+| Timing | What Happens | Manager Action |
+|--------|--------------|----------------|
+| > 7 days out | Auto-finds candidates, presents top 3 | Review & approve one |
+| ≤ 7 days out | Creates callout | Follow escalation manually |
 
 ### What Happens When Leave Is Denied?
 
