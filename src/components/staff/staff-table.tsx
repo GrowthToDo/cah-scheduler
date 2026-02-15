@@ -26,6 +26,12 @@ interface Staff {
   weekendExempt: boolean;
   voluntaryFlexAvailable: boolean;
   isActive: boolean;
+  // Optional fields for compatibility with StaffMember
+  email?: string | null;
+  phone?: string | null;
+  hireDate?: string;
+  certifications?: string[];
+  notes?: string | null;
 }
 
 const employmentLabels: Record<string, string> = {
