@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/setup", label: "Setup", icon: "Upload" },
   { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
   { href: "/staff", label: "Staff", icon: "Users" },
   { href: "/schedule", label: "Schedule", icon: "Calendar" },
@@ -19,6 +18,7 @@ const navItems = [
   { href: "/settings/units", label: "Units", icon: "Building" },
   { href: "/settings/holidays", label: "Holidays", icon: "Star" },
   { href: "/audit", label: "Audit Trail", icon: "FileText" },
+  { href: "/setup", label: "Setup", icon: "Upload" },
 ];
 
 const icons: Record<string, () => React.ReactNode> = {

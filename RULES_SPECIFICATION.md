@@ -437,20 +437,20 @@ The CAH Scheduler application provides the following pages for managing scheduli
 ### 11.4 Navigation
 
 All pages are accessible from the left sidebar. The navigation order is:
-1. Setup (Import Data)
-2. Dashboard
-3. Staff
-4. Schedule
-5. Scenarios
-6. Callouts
-7. Coverage
-8. Leave
-9. Shift Swaps
-10. PRN Availability
-11. Rules
-12. Units
-13. Holidays
-14. Audit Trail
+1. Dashboard
+2. Staff
+3. Schedule
+4. Scenarios
+5. Callouts
+6. Coverage
+7. Leave
+8. Shift Swaps
+9. PRN Availability
+10. Rules
+11. Units
+12. Holidays
+13. Audit Trail
+14. Setup (Import/Export Data)
 
 ### 11.5 Common Actions
 
