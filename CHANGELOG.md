@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.1] - 2026-02-16
+
+### Summary
+
+This release addresses expert feedback on census visibility, staff count display, and preferences visibility.
+
+---
+
+### Changes
+
+#### 1. Census Management
+- **Census input** added to shift assignment dialog - managers can now set patient census per shift
+- **Census determines staffing** - required staff count is calculated from census bands based on actual patient count
+- **Audit logging** - census changes are logged to the audit trail
+- **Excel support** - Census Bands sheet added to Excel import/export
+
+#### 2. Staff Count Display Fix
+- Previously showed `3/3 staff` even when census bands required 4
+- Now correctly shows `3/4 staff` (scheduled/required) based on census band calculations
+- API calculates effective required count: `max(shift definition, census band requirement)`
+
+#### 3. Staff Preferences Visibility
+- Staff detail dialog now shows **Shift Preferences** section
+- Displays: Preferred Shift, Max Hours/Week, Max Consecutive Days, Preferred Days Off, Avoid Weekends, Notes
+- Preferences are fetched when dialog opens
+
+#### 4. Census Bands in Excel
+- New **Census Bands** sheet in Excel export
+- Columns: Name, Unit, Min/Max Patients, Required RNs/LPNs/CNAs, Required Charge, Ratio
+- Import census bands to configure staffing requirements per patient count
+- If no Census Bands sheet provided, defaults are created
+
+---
+
+### Files Changed
+- `src/app/api/schedules/[id]/route.ts` - Calculate effective required from census
+- `src/app/api/shifts/[id]/acuity/route.ts` - Support census updates
+- `src/components/schedule/assignment-dialog.tsx` - Add census input
+- `src/components/staff/staff-detail-dialog.tsx` - Show preferences
+- `src/lib/import/parse-excel.ts` - Parse Census Bands sheet
+- `src/app/api/import/route.ts` - Import/export census bands
+- `src/db/schema.ts` - Add `census_changed` action type
+
+---
+
 ## [1.3.0] - 2026-02-15
 
 ### Summary

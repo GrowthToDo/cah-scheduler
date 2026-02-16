@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.2.1
-**Last Updated:** February 15, 2026
+**Document Version:** 1.2.2
+**Last Updated:** February 16, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -468,6 +468,9 @@ All pages are accessible from the left sidebar. The navigation order is:
 | **Add Holidays** | `/settings/holidays` | Click "Add Standard Holidays" for US holidays or "Add Holiday" for custom |
 | **Log Callout** | `/callouts` | Click "Log Callout" and follow escalation workflow |
 | **View Audit History** | `/audit` | Filter by action type, date range, or entity |
+| **Set Shift Census** | `/schedule/[id]` | Click on a shift cell, enter patient census in the dialog, click "Update" - staffing requirements adjust based on census bands |
+| **View Staff Preferences** | `/staff` | Click on a staff member's name to open detail dialog - see shift preferences, max hours, preferred days off, etc. |
+| **Export Data to Excel** | `/setup` | Click "Export Data" to download current database data (Staff, Units, Holidays, Census Bands) as Excel file |
 
 ---
 
@@ -497,6 +500,7 @@ Please review each section and note any changes needed:
 | 1.1 | Feb 13, 2026 | Added Section 11 (Application UI Guide) documenting all available pages: Leave Management, Shift Swaps, PRN Availability, Unit Configuration, and Holidays Management |
 | 1.2 | Feb 15, 2026 | **Major updates based on expert feedback:** (1) Holiday fairness now tracks annually, Christmas Eve/Day merged as one holiday; (2) Low census order updated - removed Agency, added Voluntary Time Off (VTO); (3) Added Coverage page for managing shifts needing coverage; (4) Leave approval now auto-creates coverage requests for affected assignments; (5) Staff page now shows clickable calendar view for each staff member; (6) Added callout threshold days configuration |
 | 1.2.1 | Feb 15, 2026 | **Coverage auto-fill workflow:** Leave approval (> 7 days) now automatically finds top 3 replacement candidates instead of creating manual open shifts. Each candidate includes reasons (e.g., "Cross-trained for ICU", "High reliability"). Manager reviews and approves, assignment is auto-created. Renamed "Open Shifts" to "Coverage" in navigation. |
+| 1.2.2 | Feb 16, 2026 | **Census & Preferences visibility:** (1) Census input added to shift assignment dialog - determines required staffing via census bands; (2) Staff count display fixed to show scheduled/required based on census; (3) Staff detail dialog now shows shift preferences; (4) Census Bands added to Excel import/export |
 
 ---
 
