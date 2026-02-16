@@ -35,6 +35,18 @@ export interface HolidayImport {
   year: number;
 }
 
+export interface CensusBandImport {
+  name: string;
+  unit: string;
+  minPatients: number;
+  maxPatients: number;
+  requiredRNs: number;
+  requiredLPNs: number;
+  requiredCNAs: number;
+  requiredChargeNurses: number;
+  patientToNurseRatio: string;
+}
+
 export interface ValidationError {
   sheet: string;
   row: number;
@@ -51,6 +63,7 @@ export interface ImportResult {
   staff: StaffImport[];
   units: UnitImport[];
   holidays: HolidayImport[];
+  censusBands: CensusBandImport[];
   errors: ValidationError[];
   warnings: ValidationWarning[];
 }
@@ -304,6 +317,58 @@ function parseHolidaysSheet(
   return holidays;
 }
 
+// Parse Census Bands sheet
+function parseCensusBandsSheet(
+  sheet: XLSX.WorkSheet,
+  errors: ValidationError[],
+  warnings: ValidationWarning[]
+): CensusBandImport[] {
+  const data = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, unknown>[];
+  const bands: CensusBandImport[] = [];
+
+  data.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    const name = String(row["Name"] ?? row["name"] ?? row["Band Name"] ?? "").trim();
+    const unit = String(row["Unit"] ?? row["unit"] ?? "ICU").trim();
+    const minPatients = parseNumber(row["Min Patients"] ?? row["MinPatients"] ?? row["min_patients"], 0);
+    const maxPatients = parseNumber(row["Max Patients"] ?? row["MaxPatients"] ?? row["max_patients"], 0);
+    const requiredRNs = parseNumber(row["Required RNs"] ?? row["RequiredRNs"] ?? row["required_rns"], 1);
+    const requiredLPNs = parseNumber(row["Required LPNs"] ?? row["RequiredLPNs"] ?? row["required_lpns"], 0);
+    const requiredCNAs = parseNumber(row["Required CNAs"] ?? row["RequiredCNAs"] ?? row["required_cnas"], 0);
+    const requiredChargeNurses = parseNumber(row["Required Charge"] ?? row["RequiredCharge"] ?? row["required_charge_nurses"], 1);
+    const patientToNurseRatio = String(row["Ratio"] ?? row["Patient Ratio"] ?? row["patient_to_nurse_ratio"] ?? "2:1").trim();
+
+    // Validate required fields
+    if (!name) {
+      errors.push({ sheet: "Census Bands", row: rowNum, message: "Name is required" });
+      return;
+    }
+    if (minPatients < 0) {
+      errors.push({ sheet: "Census Bands", row: rowNum, message: "Min Patients must be >= 0" });
+      return;
+    }
+    if (maxPatients < minPatients) {
+      errors.push({ sheet: "Census Bands", row: rowNum, message: "Max Patients must be >= Min Patients" });
+      return;
+    }
+
+    bands.push({
+      name,
+      unit,
+      minPatients,
+      maxPatients,
+      requiredRNs,
+      requiredLPNs,
+      requiredCNAs,
+      requiredChargeNurses,
+      patientToNurseRatio,
+    });
+  });
+
+  return bands;
+}
+
 // Main parse function
 export function parseExcelFile(buffer: ArrayBuffer): ImportResult {
   const errors: ValidationError[] = [];
@@ -319,11 +384,13 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportResult {
   const staffSheetName = sheetNames.find((n) => n.toLowerCase() === "staff");
   const unitsSheetName = sheetNames.find((n) => n.toLowerCase() === "units");
   const holidaysSheetName = sheetNames.find((n) => n.toLowerCase() === "holidays");
+  const censusBandsSheetName = sheetNames.find((n) => n.toLowerCase() === "census bands" || n.toLowerCase() === "censusbands");
 
   // Parse each sheet
   let staff: StaffImport[] = [];
   let units: UnitImport[] = [];
   let holidays: HolidayImport[] = [];
+  let censusBands: CensusBandImport[] = [];
 
   if (staffSheetName) {
     staff = parseStaffSheet(workbook.Sheets[staffSheetName], errors, warnings);
@@ -343,10 +410,16 @@ export function parseExcelFile(buffer: ArrayBuffer): ImportResult {
     warnings.push({ sheet: "Holidays", row: 0, message: "No 'Holidays' sheet found - no holidays will be imported" });
   }
 
+  if (censusBandsSheetName) {
+    censusBands = parseCensusBandsSheet(workbook.Sheets[censusBandsSheetName], errors, warnings);
+  }
+  // Census bands are optional - if not provided, defaults will be created
+
   return {
     staff,
     units,
     holidays,
+    censusBands,
     errors,
     warnings,
   };

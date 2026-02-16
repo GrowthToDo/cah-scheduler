@@ -733,6 +733,7 @@ export const exceptionLog = sqliteTable(
         "flex_home",
         "safe_harbor",
         "acuity_changed",
+        "census_changed",
         "agency_called",
         "open_shift_created",
         "open_shift_filled",

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 /**
- * Update shift acuity level and extra staff requirements
+ * Update shift acuity level, census, and extra staff requirements
  * POST /api/shifts/[id]/acuity
  */
 export async function POST(
@@ -20,19 +20,31 @@ export async function POST(
     return NextResponse.json({ error: "Shift not found" }, { status: 404 });
   }
 
+  // Build update object
+  const updateData: Record<string, unknown> = {};
+
+  if (body.acuityLevel !== undefined) {
+    updateData.acuityLevel = body.acuityLevel;
+    updateData.acuityExtraStaff = body.acuityExtraStaff ?? 0;
+  }
+
+  if (body.sitterCount !== undefined) {
+    updateData.sitterCount = body.sitterCount;
+  }
+
+  if (body.actualCensus !== undefined) {
+    updateData.actualCensus = body.actualCensus;
+  }
+
   const updated = db
     .update(shift)
-    .set({
-      acuityLevel: body.acuityLevel,
-      acuityExtraStaff: body.acuityExtraStaff ?? 0,
-      sitterCount: body.sitterCount ?? existing.sitterCount,
-    })
+    .set(updateData)
     .where(eq(shift.id, id))
     .returning()
     .get();
 
   // Log acuity change
-  if (existing.acuityLevel !== body.acuityLevel) {
+  if (body.acuityLevel !== undefined && existing.acuityLevel !== body.acuityLevel) {
     db.insert(exceptionLog)
       .values({
         entityType: "shift",
@@ -41,6 +53,21 @@ export async function POST(
         description: `Acuity changed from ${existing.acuityLevel || "none"} to ${body.acuityLevel} for shift on ${existing.date}`,
         previousState: { acuityLevel: existing.acuityLevel },
         newState: { acuityLevel: body.acuityLevel, extraStaff: body.acuityExtraStaff },
+        performedBy: body.performedBy || "nurse_manager",
+      })
+      .run();
+  }
+
+  // Log census change
+  if (body.actualCensus !== undefined && existing.actualCensus !== body.actualCensus) {
+    db.insert(exceptionLog)
+      .values({
+        entityType: "shift",
+        entityId: id,
+        action: "census_changed",
+        description: `Census changed from ${existing.actualCensus ?? "not set"} to ${body.actualCensus} for shift on ${existing.date}`,
+        previousState: { actualCensus: existing.actualCensus },
+        newState: { actualCensus: body.actualCensus },
         performedBy: body.performedBy || "nurse_manager",
       })
       .run();

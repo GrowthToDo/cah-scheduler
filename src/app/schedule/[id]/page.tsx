@@ -120,6 +120,15 @@ export default function ScheduleBuilderPage() {
     fetchSchedule();
   }
 
+  async function handleCensusChange(shiftId: string, census: number | null) {
+    await fetch(`/api/shifts/${shiftId}/acuity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actualCensus: census }),
+    });
+    fetchSchedule();
+  }
+
   function handleShiftClick(shift: ShiftData) {
     setSelectedShift(shift);
     setDialogOpen(true);
@@ -290,6 +299,7 @@ export default function ScheduleBuilderPage() {
         scheduleId={scheduleId}
         onAssign={handleAssign}
         onRemove={handleRemove}
+        onCensusChange={handleCensusChange}
       />
 
       {/* Shift violations modal */}

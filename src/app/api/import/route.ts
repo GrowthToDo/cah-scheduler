@@ -168,8 +168,24 @@ function importData(data: ImportResult) {
   // 5. Create default rules
   createDefaultRules();
 
-  // 6. Create default census bands for first unit
-  if (unitNames.length > 0) {
+  // 6. Import census bands or create defaults
+  if (data.censusBands && data.censusBands.length > 0) {
+    // Import from Excel
+    for (const cb of data.censusBands) {
+      db.insert(schema.censusBand).values({
+        name: cb.name,
+        unit: cb.unit,
+        minPatients: cb.minPatients,
+        maxPatients: cb.maxPatients,
+        requiredRNs: cb.requiredRNs,
+        requiredLPNs: cb.requiredLPNs,
+        requiredCNAs: cb.requiredCNAs,
+        requiredChargeNurses: cb.requiredChargeNurses,
+        patientToNurseRatio: cb.patientToNurseRatio,
+      }).run();
+    }
+  } else if (unitNames.length > 0) {
+    // Create defaults for first unit
     createDefaultCensusBands(unitNames[0]);
   }
 }
@@ -223,6 +239,7 @@ export async function POST(request: Request) {
           staff: result.staff.length,
           units: result.units.length,
           holidays: result.holidays.length,
+          censusBands: result.censusBands.length,
         },
         errors: result.errors,
         warnings: result.warnings,
@@ -259,6 +276,7 @@ export async function POST(request: Request) {
         staff: result.staff.length,
         units: result.units.length,
         holidays: result.holidays.length,
+        censusBands: result.censusBands.length,
       },
       warnings: result.warnings,
     });
@@ -292,6 +310,7 @@ function exportCurrentData(): ArrayBuffer {
   const staffData = db.select().from(schema.staff).all();
   const unitsData = db.select().from(schema.unit).all();
   const holidaysData = db.select().from(schema.publicHoliday).all();
+  const censusBandsData = db.select().from(schema.censusBand).all();
 
   const workbook = XLSX.utils.book_new();
 
@@ -371,6 +390,34 @@ function exportCurrentData(): ArrayBuffer {
 
   const holidaysSheet = XLSX.utils.aoa_to_sheet([holidaysHeaders, ...holidaysRows]);
   XLSX.utils.book_append_sheet(workbook, holidaysSheet, "Holidays");
+
+  // Census Bands sheet
+  const censusBandsHeaders = [
+    "Name",
+    "Unit",
+    "Min Patients",
+    "Max Patients",
+    "Required RNs",
+    "Required LPNs",
+    "Required CNAs",
+    "Required Charge",
+    "Ratio",
+  ];
+
+  const censusBandsRows = censusBandsData.map((cb) => [
+    cb.name,
+    cb.unit,
+    cb.minPatients,
+    cb.maxPatients,
+    cb.requiredRNs,
+    cb.requiredLPNs,
+    cb.requiredCNAs,
+    cb.requiredChargeNurses,
+    cb.patientToNurseRatio,
+  ]);
+
+  const censusBandsSheet = XLSX.utils.aoa_to_sheet([censusBandsHeaders, ...censusBandsRows]);
+  XLSX.utils.book_append_sheet(workbook, censusBandsSheet, "Census Bands");
 
   // Generate buffer
   const buffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +54,7 @@ export function AssignmentDialog({
   scheduleId,
   onAssign,
   onRemove,
+  onCensusChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,11 +62,16 @@ export function AssignmentDialog({
   scheduleId: string;
   onAssign: (shiftId: string, staffId: string, isChargeNurse: boolean) => void;
   onRemove: (assignmentId: string) => void;
+  onCensusChange?: (shiftId: string, census: number | null) => void;
 }) {
   const [availableStaff, setAvailableStaff] = useState<StaffOption[]>([]);
+  const [censusValue, setCensusValue] = useState<string>("");
 
   useEffect(() => {
     if (open && shift) {
+      // Set initial census value
+      setCensusValue(shift.actualCensus?.toString() ?? "");
+
       fetch("/api/staff")
         .then((r) => r.json())
         .then((allStaff: StaffOption[]) => {
@@ -85,6 +93,13 @@ export function AssignmentDialog({
     }
   }, [open, shift]);
 
+  async function handleCensusUpdate() {
+    if (!shift || !onCensusChange) return;
+    const newCensus = censusValue === "" ? null : parseInt(censusValue, 10);
+    if (censusValue !== "" && isNaN(newCensus as number)) return;
+    onCensusChange(shift.id, newCensus);
+  }
+
   if (!shift) return null;
 
   const needsCharge =
@@ -102,16 +117,40 @@ export function AssignmentDialog({
 
         <div className="space-y-4">
           {/* Shift info */}
-          <div className="flex gap-2 text-sm">
+          <div className="flex gap-2 text-sm flex-wrap">
             <Badge variant="secondary">
               {shift.assignments.length}/{shift.requiredStaffCount} staff
             </Badge>
             {needsCharge && (
               <Badge variant="destructive">Needs charge nurse</Badge>
             )}
-            {shift.actualCensus !== null && (
-              <Badge variant="secondary">Census: {shift.actualCensus}</Badge>
-            )}
+          </div>
+
+          {/* Census input */}
+          <div className="flex items-end gap-2 p-3 rounded-md border bg-muted/30">
+            <div className="flex-1">
+              <Label htmlFor="census" className="text-sm">Patient Census</Label>
+              <Input
+                id="census"
+                type="number"
+                min="0"
+                max="50"
+                placeholder="Enter patient count"
+                value={censusValue}
+                onChange={(e) => setCensusValue(e.target.value)}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Census determines required staffing from census bands
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleCensusUpdate}
+              disabled={!onCensusChange}
+            >
+              Update
+            </Button>
           </div>
 
           {/* Current assignments */}

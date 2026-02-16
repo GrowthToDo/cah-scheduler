@@ -5,6 +5,7 @@ import {
   shiftDefinition,
   assignment,
   staff,
+  censusBand,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -83,26 +84,56 @@ export async function GET(
     assignmentsByShift.set(a.shiftId, list);
   }
 
+  // Get census bands for calculating effective required count
+  const censusBands = db
+    .select()
+    .from(censusBand)
+    .where(eq(censusBand.isActive, true))
+    .all();
+
+  // Helper to calculate effective required staff based on census
+  function getEffectiveRequired(actualCensus: number | null, baseRequired: number): number {
+    if (actualCensus === null) return baseRequired;
+
+    const band = censusBands.find(
+      (b) => actualCensus >= b.minPatients && actualCensus <= b.maxPatients
+    );
+
+    if (band) {
+      // Census band requirement = RNs + CNAs
+      const censusRequired = band.requiredRNs + band.requiredCNAs;
+      return Math.max(censusRequired, baseRequired);
+    }
+
+    return baseRequired;
+  }
+
   // Build response
-  const shiftsWithAssignments = shifts.map((s) => ({
-    id: s.id,
-    date: s.date,
-    shiftDefinitionId: s.shiftDefinitionId,
-    shiftType: s.defShiftType,
-    name: s.defName,
-    startTime: s.defStartTime,
-    endTime: s.defEndTime,
-    durationHours: s.defDurationHours,
-    requiredStaffCount: s.requiredStaffCount ?? s.defRequiredStaff,
-    requiresChargeNurse: s.requiresChargeNurse ?? s.defRequiresCharge,
-    countsTowardStaffing: s.defCountsTowardStaffing,
-    actualCensus: s.actualCensus,
-    acuityLevel: s.acuityLevel,
-    acuityExtraStaff: s.acuityExtraStaff,
-    sitterCount: s.sitterCount,
-    notes: s.notes,
-    assignments: assignmentsByShift.get(s.id) ?? [],
-  }));
+  const shiftsWithAssignments = shifts.map((s) => {
+    const baseRequired = s.requiredStaffCount ?? s.defRequiredStaff;
+    const effectiveRequired = getEffectiveRequired(s.actualCensus, baseRequired);
+
+    return {
+      id: s.id,
+      date: s.date,
+      shiftDefinitionId: s.shiftDefinitionId,
+      shiftType: s.defShiftType,
+      name: s.defName,
+      startTime: s.defStartTime,
+      endTime: s.defEndTime,
+      durationHours: s.defDurationHours,
+      requiredStaffCount: effectiveRequired,
+      baseRequiredStaffCount: baseRequired,
+      requiresChargeNurse: s.requiresChargeNurse ?? s.defRequiresCharge,
+      countsTowardStaffing: s.defCountsTowardStaffing,
+      actualCensus: s.actualCensus,
+      acuityLevel: s.acuityLevel,
+      acuityExtraStaff: s.acuityExtraStaff,
+      sitterCount: s.sitterCount,
+      notes: s.notes,
+      assignments: assignmentsByShift.get(s.id) ?? [],
+    };
+  });
 
   return NextResponse.json({
     ...sched,
