@@ -6,6 +6,128 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.2] - 2026-02-18
+
+### Summary
+
+This release adds **staff scheduling preferences** to the Excel import/export feature. Staff preferences (shift preference, days off, consecutive days, etc.) can now be managed via Excel spreadsheet, enabling bulk updates and easier initial setup.
+
+---
+
+### New Feature: Staff Preferences in Excel
+
+#### The Problem
+
+Staff preferences were only editable through the UI one person at a time. For hospitals with 30+ staff members, setting up everyone's preferred shifts, days off, and work limits was time-consuming.
+
+#### The Solution
+
+Staff preferences are now included in the Excel export/import. Managers can:
+
+1. **Export current data** - Preferences are included in the Staff sheet
+2. **Edit in Excel** - Update preferences for multiple staff at once
+3. **Import** - All preferences are saved along with staff data
+
+---
+
+### New Excel Columns in Staff Sheet
+
+| Column | Values | Default | Description |
+|--------|--------|---------|-------------|
+| Preferred Shift | day, night, evening, any | any | Which shift type the staff prefers |
+| Preferred Days Off | Comma-separated days | (empty) | Days staff prefers not to work (e.g., "Saturday, Sunday") |
+| Max Consecutive Days | 1-7 | 3 | Maximum days in a row before requiring a day off |
+| Max Hours Per Week | 8-60 | 40 | Maximum scheduled hours per week |
+| Avoid Weekends | Yes / No | No | Soft preference to avoid weekend shifts |
+
+---
+
+### How It Works
+
+#### Export
+When downloading current data, each staff row now includes their preference settings in the new columns.
+
+#### Import
+When uploading an Excel file:
+- Preference columns are parsed with flexible column name matching
+- Invalid values fall back to defaults (e.g., "morning" → "any")
+- Days are normalized to proper capitalization ("saturday" → "Saturday")
+- Preferences are saved to the `staff_preferences` table
+
+#### Template
+The downloadable template now includes example preference values:
+```
+Preferred Shift: day
+Preferred Days Off: Saturday, Sunday
+Max Consecutive Days: 4
+Max Hours Per Week: 40
+Avoid Weekends: No
+```
+
+---
+
+### Validation
+
+**Preferred Shift:**
+- Must be: `day`, `night`, `evening`, or `any`
+- Case-insensitive ("Day" and "DAY" both work)
+- Invalid values default to `any`
+
+**Preferred Days Off:**
+- Comma-separated day names
+- Valid days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+- Case-insensitive
+- Invalid day names are ignored
+
+**Max Consecutive Days:**
+- Must be between 1 and 7
+- Non-numeric values default to 3
+
+**Max Hours Per Week:**
+- Must be between 8 and 60
+- Non-numeric values default to 40
+
+**Avoid Weekends:**
+- Accepts: Yes, No, True, False, 1, 0
+- Case-insensitive
+
+---
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/import/parse-excel.ts` | Added preference fields to `StaffImport` interface; parse preference columns in `parseStaffSheet()`; added preference columns to `generateTemplate()` |
+| `src/app/api/import/route.ts` | Query and export staff preferences; use imported preferences instead of defaults on import |
+| `docs/09-using-the-app.md` | Documented new preference columns |
+| `RULES_SPECIFICATION.md` | Updated to v1.2.3 with changelog entry |
+
+---
+
+### Integration with Scheduling Rules
+
+The imported preferences integrate with existing scheduling rules:
+
+- **preference-match** (soft rule) - Penalizes assignments that don't match preferred shift type or days off
+- **max-consecutive** (hard rule) - Enforces the max consecutive days setting
+- **weekend-count** (soft rule) - Considers avoid weekends preference
+
+---
+
+### Example Workflow
+
+1. **Export** current staff data from Setup page
+2. **Open** the Excel file
+3. **Add/update** preference columns:
+   - Set Maria to prefer day shifts
+   - Set John to avoid weekends
+   - Set all PRN staff to max 2 consecutive days
+4. **Upload** the modified file
+5. **Import** - preferences are saved for all staff
+6. **Generate schedule** - rules engine uses the new preferences
+
+---
+
 ## [1.3.1] - 2026-02-16
 
 ### Summary
