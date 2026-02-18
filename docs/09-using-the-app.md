@@ -61,7 +61,13 @@ Here's every page in the application and what you can do on each.
 - First Name, Last Name (required)
 - Role: RN, LPN, or CNA (required)
 - Employment Type: full_time, part_time, per_diem, float, agency (required)
-- FTE, Home Unit, Competency Level, etc. (optional)
+- FTE, Home Unit, Competency Level, Charge Nurse Qualified, etc. (optional)
+- **Staff Preferences** (optional):
+  - Preferred Shift: day, night, evening, or any
+  - Preferred Days Off: comma-separated days (e.g., "Saturday, Sunday")
+  - Max Consecutive Days: 1-7 (default: 3)
+  - Max Hours Per Week: 8-60 (default: 40)
+  - Avoid Weekends: Yes or No
 
 **Sheet 2: Units**
 - Name (required) - e.g., ICU, ER, Med-Surg
