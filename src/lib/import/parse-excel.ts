@@ -18,6 +18,12 @@ export interface StaffImport {
   weekendExempt: boolean;
   voluntaryFlexAvailable: boolean;
   notes: string | null;
+  // Staff preferences
+  preferredShift: "day" | "night" | "evening" | "any";
+  preferredDaysOff: string[];
+  maxConsecutiveDays: number;
+  maxHoursPerWeek: number;
+  avoidWeekends: boolean;
 }
 
 export interface UnitImport {
@@ -71,6 +77,8 @@ export interface ImportResult {
 // Valid enum values
 const VALID_ROLES = ["RN", "LPN", "CNA"];
 const VALID_EMPLOYMENT_TYPES = ["full_time", "part_time", "per_diem", "float", "agency"];
+const VALID_PREFERRED_SHIFTS = ["day", "night", "evening", "any"];
+const VALID_DAYS_OF_WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 // Helper to parse Yes/No to boolean
 function parseBoolean(value: unknown): boolean {
@@ -200,6 +208,25 @@ function parseStaffSheet(
     const voluntaryFlexAvailable = parseBoolean(row["VTO Available"] ?? row["VTOAvailable"] ?? row["vto_available"] ?? row["Voluntary Flex Available"]);
     const notes = String(row["Notes"] ?? row["notes"] ?? "").trim() || null;
 
+    // Parse staff preference fields
+    const preferredShiftRaw = String(row["Preferred Shift"] ?? row["PreferredShift"] ?? row["preferred_shift"] ?? "any").toLowerCase().trim();
+    const preferredShift = VALID_PREFERRED_SHIFTS.includes(preferredShiftRaw) ? preferredShiftRaw : "any";
+
+    // Parse preferred days off - comma-separated list of day names
+    const preferredDaysOffRaw = parseCommaSeparated(row["Preferred Days Off"] ?? row["PreferredDaysOff"] ?? row["preferred_days_off"]);
+    const preferredDaysOff = preferredDaysOffRaw
+      .map(day => {
+        const normalized = day.toLowerCase().trim();
+        // Find matching day and return properly capitalized version
+        const validDay = VALID_DAYS_OF_WEEK.find(d => d === normalized);
+        return validDay ? validDay.charAt(0).toUpperCase() + validDay.slice(1) : null;
+      })
+      .filter((day): day is string => day !== null);
+
+    const maxConsecutiveDays = parseNumber(row["Max Consecutive Days"] ?? row["MaxConsecutiveDays"] ?? row["max_consecutive_days"], 3, 1, 7);
+    const maxHoursPerWeek = parseNumber(row["Max Hours Per Week"] ?? row["MaxHoursPerWeek"] ?? row["max_hours_per_week"], 40, 8, 60);
+    const avoidWeekends = parseBoolean(row["Avoid Weekends"] ?? row["AvoidWeekends"] ?? row["avoid_weekends"]);
+
     // Add warnings for missing optional data
     if (!homeUnit) {
       warnings.push({ sheet: "Staff", row: rowNum, message: `No Home Unit specified for ${firstName} ${lastName}` });
@@ -222,6 +249,12 @@ function parseStaffSheet(
       weekendExempt,
       voluntaryFlexAvailable,
       notes,
+      // Staff preferences
+      preferredShift: preferredShift as StaffImport["preferredShift"],
+      preferredDaysOff,
+      maxConsecutiveDays,
+      maxHoursPerWeek,
+      avoidWeekends,
     });
   });
 
@@ -447,6 +480,11 @@ export function generateTemplate(): ArrayBuffer {
     "Weekend Exempt",
     "VTO Available",
     "Notes",
+    "Preferred Shift",
+    "Preferred Days Off",
+    "Max Consecutive Days",
+    "Max Hours Per Week",
+    "Avoid Weekends",
   ];
   const staffExample = [
     "Maria",
@@ -465,6 +503,11 @@ export function generateTemplate(): ArrayBuffer {
     "No",
     "No",
     "Senior charge nurse",
+    "day",
+    "Saturday, Sunday",
+    "4",
+    "40",
+    "No",
   ];
   const staffSheet = XLSX.utils.aoa_to_sheet([staffHeaders, staffExample]);
   XLSX.utils.book_append_sheet(workbook, staffSheet, "Staff");

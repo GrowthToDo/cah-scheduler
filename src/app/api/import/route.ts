@@ -153,11 +153,14 @@ function importData(data: ImportResult) {
       notes: s.notes,
     }).returning().get();
 
-    // Create default preferences
+    // Create staff preferences from imported data
     db.insert(schema.staffPreferences).values({
       staffId: newStaff.id,
-      maxHoursPerWeek: s.employmentType === "per_diem" ? 24 : Math.round(s.fte * 40),
-      maxConsecutiveDays: s.employmentType === "per_diem" ? 2 : 4,
+      preferredShift: s.preferredShift,
+      preferredDaysOff: s.preferredDaysOff,
+      maxConsecutiveDays: s.maxConsecutiveDays,
+      maxHoursPerWeek: s.maxHoursPerWeek,
+      avoidWeekends: s.avoidWeekends,
     }).run();
   }
 
@@ -308,9 +311,13 @@ function exportCurrentData(): ArrayBuffer {
 
   // Query current data from database
   const staffData = db.select().from(schema.staff).all();
+  const staffPreferencesData = db.select().from(schema.staffPreferences).all();
   const unitsData = db.select().from(schema.unit).all();
   const holidaysData = db.select().from(schema.publicHoliday).all();
   const censusBandsData = db.select().from(schema.censusBand).all();
+
+  // Create a map of staff preferences by staffId for quick lookup
+  const preferencesMap = new Map(staffPreferencesData.map(p => [p.staffId, p]));
 
   const workbook = XLSX.utils.book_new();
 
@@ -332,26 +339,39 @@ function exportCurrentData(): ArrayBuffer {
     "Weekend Exempt",
     "VTO Available",
     "Notes",
+    "Preferred Shift",
+    "Preferred Days Off",
+    "Max Consecutive Days",
+    "Max Hours Per Week",
+    "Avoid Weekends",
   ];
 
-  const staffRows = staffData.map((s) => [
-    s.firstName,
-    s.lastName,
-    s.role,
-    s.employmentType,
-    s.fte,
-    s.homeUnit || "",
-    (s.crossTrainedUnits || []).join(", "),
-    s.icuCompetencyLevel,
-    s.isChargeNurseQualified ? "Yes" : "No",
-    s.reliabilityRating,
-    s.email || "",
-    s.phone || "",
-    s.hireDate,
-    s.weekendExempt ? "Yes" : "No",
-    s.voluntaryFlexAvailable ? "Yes" : "No",
-    s.notes || "",
-  ]);
+  const staffRows = staffData.map((s) => {
+    const prefs = preferencesMap.get(s.id);
+    return [
+      s.firstName,
+      s.lastName,
+      s.role,
+      s.employmentType,
+      s.fte,
+      s.homeUnit || "",
+      (s.crossTrainedUnits || []).join(", "),
+      s.icuCompetencyLevel,
+      s.isChargeNurseQualified ? "Yes" : "No",
+      s.reliabilityRating,
+      s.email || "",
+      s.phone || "",
+      s.hireDate,
+      s.weekendExempt ? "Yes" : "No",
+      s.voluntaryFlexAvailable ? "Yes" : "No",
+      s.notes || "",
+      prefs?.preferredShift || "any",
+      (prefs?.preferredDaysOff || []).join(", "),
+      prefs?.maxConsecutiveDays ?? 3,
+      prefs?.maxHoursPerWeek ?? 40,
+      prefs?.avoidWeekends ? "Yes" : "No",
+    ];
+  });
 
   const staffSheet = XLSX.utils.aoa_to_sheet([staffHeaders, ...staffRows]);
   XLSX.utils.book_append_sheet(workbook, staffSheet, "Staff");
