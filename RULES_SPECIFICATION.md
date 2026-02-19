@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.2.3
-**Last Updated:** February 18, 2026
+**Document Version:** 1.2.4
+**Last Updated:** February 19, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -124,7 +124,8 @@ Hard rules are constraints that **cannot be broken**. The scheduler will not cre
 ### 3.8 Level 2 ICU/ER Supervision Required *(NEW)*
 - **Rule:** Level 2 (Advanced Beginner) staff working in **ICU or ER** must have at least one Level 4 or Level 5 staff member on the same shift
 - **Purpose:** Advanced beginners need supervision in critical care areas
-- **Note:** This rule only applies to ICU and ER units, not Med-Surg
+- **Applies to units:** ICU, ER, ED, Emergency (exact word match on unit name)
+- **Note:** Unit matching uses word-boundary comparison, not substring matching. A unit named "Med-Surg" does **not** trigger this rule — "MED-SURG" must contain one of the supervised unit names as a complete word (e.g., "ICU", "ER", "ED", "EMERGENCY"). This prevents false positives on units whose names happen to contain supervised unit abbreviations as substrings.
 
 ### 3.9 No Overlapping Shifts *(NEW)*
 - **Rule:** A staff member cannot be assigned to two shifts that overlap in time
@@ -182,8 +183,9 @@ Soft rules are **preferences** that the scheduler tries to optimize. Violations 
 ### 4.3 Consecutive Weekends Penalty *(NEW)*
 - **Rule:** Penalize staff who work more than the maximum consecutive weekends
 - **Default Maximum:** 2 consecutive weekends
-- **Penalty:** Applied per extra consecutive weekend
+- **Penalty:** Applied per extra consecutive weekend (0.8 per weekend over the limit)
 - **Purpose:** Ensures weekends are distributed fairly over time
+- **Weekend definition:** Saturday and Sunday of the same calendar weekend count as **one weekend**, not two. Working both days of the same weekend does not increment the consecutive weekend counter twice.
 
 ### 4.4 Holiday Fairness *(UPDATED)*
 - **Rule:** Holiday shifts should be distributed fairly among staff **annually** (not per schedule period)

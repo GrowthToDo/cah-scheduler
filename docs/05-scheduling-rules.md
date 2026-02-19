@@ -122,6 +122,8 @@ These are **preferences**. The scheduler tries to satisfy them but can break the
 
 **What it means:** Level 2 staff working in ICU or ER need a Level 4+ supervisor on the same shift.
 
+**Which units does this apply to?** Only units whose name is (or contains the word) **ICU**, **ER**, **ED**, or **Emergency**. General units like Med-Surg do **not** trigger this rule — Level 2 nurses can work Med-Surg independently.
+
 **Why it matters:** Advanced beginners are still learning critical care.
 
 ### 9. No Overlapping Shifts
@@ -210,9 +212,12 @@ These are **preferences**. The scheduler tries to satisfy them but can break the
 
 **What it means:** Try not to have anyone work more than 2 weekends in a row.
 
+**What counts as one weekend?** Saturday and Sunday of the same calendar weekend count as **one weekend**, not two. Working both days of the same weekend is normal and does not make it "two consecutive weekends."
+
 **Example:**
-> John works Weekend 1, Weekend 2, Weekend 3.
+> John works Weekend 1 (Sat + Sun), Weekend 2 (Sat + Sun), Weekend 3 (Sat + Sun).
 > That's 3 consecutive weekends - the scheduler will try to avoid this.
+> But working both Saturday and Sunday of a single weekend counts as just **one** weekend.
 
 **Why it's soft:** Sometimes unavoidable with small staff, but we try.
 

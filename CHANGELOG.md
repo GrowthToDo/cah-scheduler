@@ -6,6 +6,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.3] - 2026-02-19
+
+### Summary
+
+This release fixes two silent rule engine bugs discovered during test suite development, and establishes a comprehensive unit test suite (108 tests) as the foundation for ongoing rule correctness verification. Both bugs caused incorrect rule evaluations that went undetected in production.
+
+---
+
+### Bug Fix 1: Med-Surg Shifts Incorrectly Triggered Level 2 Supervision Rule
+
+#### The Problem
+
+Rule 8 (Level 2 ICU/ER Supervision) is supposed to fire only for ICU, ER, and ED units. The rule checked whether the unit name *contained* a supervised unit keyword using JavaScript's `String.includes()`. Because `"MED-SURG".includes("ED")` evaluates to `true` (the string "ED" is a substring of "MED"), any shift on a Med-Surg unit was incorrectly flagged as requiring a Level 4+ supervisor when a Level 2 nurse was assigned.
+
+This meant Level 2 nurses were being shown false violations on Med-Surg shifts — a unit they are fully qualified to work independently.
+
+#### The Solution
+
+The matching logic was changed from substring matching to exact word matching. The unit name is now split into individual words (on spaces, hyphens, and underscores), and each word is compared exactly against the supervised-unit list (`ICU`, `ER`, `ED`, `EMERGENCY`). A unit named "Med-Surg" produces the words `["MED", "SURG"]` — neither matches — so the rule correctly does not fire.
+
+---
+
+### Bug Fix 2: Same-Weekend Saturday/Sunday Counted as Two Consecutive Weekends
+
+#### The Problem
+
+Rule 3 in the soft rules (Consecutive Weekends) tracks how many weekends in a row a staff member works. A "weekend ID" was computed by converting the shift date to a week number. Because week numbers change between Saturday and Sunday (Saturday is the last day of one ISO week, Sunday is the first of the next), a staff member working both Saturday and Sunday of the **same** weekend received two different weekend IDs.
+
+This made one calendar weekend count as two consecutive weekends, falsely triggering the "more than 2 consecutive weekends" penalty whenever a staff member worked a full weekend.
+
+#### The Solution
+
+The `getWeekendId()` function was updated so that Sundays are shifted back by one day to their preceding Saturday before the week number is calculated. This ensures Saturday Feb 7 and Sunday Feb 8 both produce the same weekend ID (`2026-W6`), correctly treating them as one weekend.
+
+---
+
+### New: Unit Test Suite
+
+A comprehensive Vitest unit test suite was added covering all 13 hard rules and 8 soft rules. Tests run without a database connection — rule evaluators are pure functions that receive a `RuleContext` object, making them fully testable in isolation.
+
+**Coverage:**
+- 108 tests across 12 test files
+- All rule evaluators tested with passing, failing, and edge-case scenarios
+- Two test-driven bugs discovered and fixed (see above)
+
+**Running tests:**
+```bash
+npm test        # Run all tests once
+npm run test:watch   # Watch mode
+```
+
+---
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/engine/rules/competency-pairing.ts` | Changed unit name matching from substring to exact word matching to fix Med-Surg false positives |
+| `src/lib/engine/rules/weekend-holiday-fairness.ts` | Fixed `getWeekendId()` to shift Sunday back to Saturday before computing week number |
+| `src/db/schema.ts` | No changes |
+| `vitest.config.ts` | **NEW** - Vitest configuration with `vite-tsconfig-paths` for `@/*` alias support |
+| `src/__tests__/helpers/context.ts` | **NEW** - Shared test helper factory functions for `RuleContext` mocks |
+| `src/__tests__/rules/min-staff.test.ts` | **NEW** - 7 tests for minimum staff rule |
+| `src/__tests__/rules/charge-nurse.test.ts` | **NEW** - 6 tests for charge nurse requirement |
+| `src/__tests__/rules/patient-ratio.test.ts` | **NEW** - 7 tests for patient-to-staff ratio |
+| `src/__tests__/rules/rest-hours.test.ts` | **NEW** - 7 tests for minimum rest between shifts |
+| `src/__tests__/rules/max-consecutive.test.ts` | **NEW** - 6 tests for maximum consecutive days |
+| `src/__tests__/rules/icu-competency.test.ts` | **NEW** - 5 tests for ICU competency minimum |
+| `src/__tests__/rules/competency-pairing.test.ts` | **NEW** - 10 tests for competency pairing (Level 1 preceptor + Level 2 supervision) |
+| `src/__tests__/rules/no-overlapping-shifts.test.ts` | **NEW** - 6 tests for overlapping shifts |
+| `src/__tests__/rules/prn-availability.test.ts` | **NEW** - 12 tests for PRN availability |
+| `src/__tests__/rules/on-call-limits.test.ts` | **NEW** - 8 tests for on-call limits |
+| `src/__tests__/rules/overtime-v2.test.ts` | **NEW** - 7 tests for overtime rule |
+| `src/__tests__/rules/soft-rules.test.ts` | **NEW** - 27 tests for all 8 soft rules |
+| `package.json` | Added `test` and `test:watch` scripts; added `vitest`, `vite-tsconfig-paths`, `@vitest/ui` devDependencies |
+| `RULES_SPECIFICATION.md` | Updated to v1.2.4; Rule 3.8 updated with word-boundary matching note; Rule 4.3 updated with weekend definition |
+
+---
+
+### Impact
+
+These were silent bugs — they produced incorrect violation flags without crashing. Any schedule with:
+- Level 2 nurses on Med-Surg shifts (Bug 1)
+- Staff working both days of a weekend (Bug 2)
+
+...would have shown spurious rule violations in the UI. No data was corrupted; only the displayed violation state was incorrect.
+
+---
+
 ## [1.3.2] - 2026-02-18
 
 ### Summary

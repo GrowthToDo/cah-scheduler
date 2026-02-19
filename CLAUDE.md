@@ -215,3 +215,27 @@ Full specification: `RULES_SPECIFICATION.md`
 - `CHANGELOG.md` — Feature history and migration notes
 - `docs/01-introduction.md` through `docs/10-glossary.md` — User-facing guides
 - `src/db/seed.ts` — Canonical example of test data structure
+
+---
+
+## Documentation Maintenance Rules
+
+These are non-negotiable requirements for every change made to this codebase.
+
+### RULES_SPECIFICATION.md
+- Must always reflect the **exact, current logic** the application is running on
+- Update this file whenever any change affects: rule behavior, thresholds, penalty weights, unit configuration, escalation logic, or any scheduling constraint
+- Update the document version number and the inline changelog table at the bottom of the file
+- Even bug fixes that correct rule behavior must be documented here — if the fix changes what the rule actually does in practice, it belongs in this document
+
+### Beginner Documentation (docs/)
+- The `docs/` folder contains user-facing guides written for non-technical staff
+- Keep these aligned with the current state of the application
+- `docs/05-scheduling-rules.md` is the most rule-sensitive — update it when rules change
+- Language should remain simple and jargon-free; do not introduce technical implementation details
+
+### CHANGELOG.md
+- Add a new versioned entry for every commit that changes application behavior
+- Review previous entries before writing a new one — match the established style, structure, and level of detail exactly
+- Patch version (1.x.Y) for bug fixes; minor version (1.Y.0) for new features
+- Each entry should explain: what changed, why it changed, and what files were modified
