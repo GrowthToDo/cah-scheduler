@@ -76,7 +76,7 @@ export const level2SupervisionRule: RuleEvaluator = {
     const violations: RuleViolation[] = [];
 
     // ICU and ER units require supervision
-    const supervisedUnits = ["ICU", "ER", "ED", "Emergency"];
+    const supervisedUnits = ["ICU", "ER", "ED", "EMERGENCY"];
 
     // Group assignments by shift
     const shiftAssignments = new Map<string, string[]>();
@@ -91,9 +91,11 @@ export const level2SupervisionRule: RuleEvaluator = {
       const shiftInfo = context.shiftMap.get(shiftId);
       if (!shiftInfo) continue;
 
-      // Only check ICU/ER units
-      const isSupervisionRequired = supervisedUnits.some(
-        (u) => shiftInfo.unit.toUpperCase().includes(u.toUpperCase())
+      // Only check ICU/ER units — split unit name into words to avoid substring false matches
+      // e.g. "Med-Surg" must not match "ED" just because "MED" contains "ED"
+      const unitWords = shiftInfo.unit.toUpperCase().split(/[\s\-_]+/);
+      const isSupervisionRequired = supervisedUnits.some((u) =>
+        unitWords.includes(u)
       );
       if (!isSupervisionRequired) continue;
 

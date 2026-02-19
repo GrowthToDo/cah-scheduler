@@ -95,8 +95,15 @@ export const consecutiveWeekendRule: RuleEvaluator = {
     const maxConsecutive = context.unitConfig?.maxConsecutiveWeekends ?? 2;
 
     // Helper to get weekend identifier (year-week)
+    // Maps both Saturday AND Sunday to the same identifier by anchoring on Saturday.
+    // Without this, Saturday (end of one ISO week) and Sunday (start of next ISO week)
+    // would produce different week numbers, incorrectly treating them as separate weekends.
     const getWeekendId = (dateStr: string): string => {
       const date = new Date(dateStr);
+      // If Sunday (day 0), shift back to the preceding Saturday so it shares the same week ID
+      if (date.getDay() === 0) {
+        date.setDate(date.getDate() - 1);
+      }
       const startOfYear = new Date(date.getFullYear(), 0, 1);
       const days = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
       const weekNum = Math.ceil((days + startOfYear.getDay() + 1) / 7);
