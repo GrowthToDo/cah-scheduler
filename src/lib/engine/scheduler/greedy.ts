@@ -147,6 +147,42 @@ export function greedyConstruct(
       }
     }
 
+    // ── Pass 1.5: Ensure Level 4+ supervisor on ICU/ER shifts ───────────────
+    // The competency-pairing hard rule requires Level 4+ on every ICU/ER shift.
+    // We fill that slot before regular candidates so Level 2 staff can be placed safely.
+    if (isICUUnit(shift.unit)) {
+      const shiftAssigns1 = state.getShiftAssignments(shift.id);
+      const alreadyHasLevel4 = shiftAssigns1.some(
+        (a) => (context.staffMap.get(a.staffId)?.icuCompetencyLevel ?? 0) >= 4
+      );
+      if (!alreadyHasLevel4) {
+        const supervisorEligible = activeStaff.filter(
+          (s) =>
+            s.icuCompetencyLevel >= 4 &&
+            !shiftAssigns1.some((a) => a.staffId === s.id) &&
+            passesHardRules(s, shift, state, context)
+        );
+        if (supervisorEligible.length > 0) {
+          const currentSlotAssignments = state.getShiftAssignments(shift.id);
+          const best = pickBest(
+            supervisorEligible,
+            shift,
+            state,
+            weights,
+            currentSlotAssignments,
+            context.staffMap,
+            false,
+            context
+          );
+          const draft = buildDraft(best, shift, false, state);
+          assignments.push(draft);
+          state.addAssignment(draft);
+        } else {
+          slotReasons.push("no eligible Level 4+ staff for ICU/ER supervision");
+        }
+      }
+    }
+
     // ── Pass 2: Fill remaining staff slots ──────────────────────────────────
     const remaining = required - state.getShiftAssignments(shift.id).length;
     for (let slot = 0; slot < remaining; slot++) {

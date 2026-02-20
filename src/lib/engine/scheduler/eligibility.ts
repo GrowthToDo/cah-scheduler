@@ -41,14 +41,42 @@ export function passesHardRules(
   // 3. ICU/ER competency (level ≥ 2)
   if (isICUUnit(shiftInfo.unit) && staffInfo.icuCompetencyLevel < 2) return false;
 
+  // 3b. Level 1 staff require a Level 5 preceptor already on the same shift.
+  //     Prevents assigning a Level 1 novice unless a preceptor is confirmed first.
+  if (staffInfo.icuCompetencyLevel === 1) {
+    const hasLevel5 = state
+      .getShiftAssignments(shiftInfo.id)
+      .some((a) => (context.staffMap.get(a.staffId)?.icuCompetencyLevel ?? 0) === 5);
+    if (!hasLevel5) return false;
+  }
+
+  // 3c. Level 2 staff on ICU/ER require a Level 4+ supervisor already on the same shift.
+  //     The greedy pre-pass fills that Level 4+ slot first; if it couldn't, Level 2
+  //     staff are also excluded from regular slots, leaving the shift understaffed.
+  if (isICUUnit(shiftInfo.unit) && staffInfo.icuCompetencyLevel === 2) {
+    const hasLevel4Plus = state
+      .getShiftAssignments(shiftInfo.id)
+      .some((a) => (context.staffMap.get(a.staffId)?.icuCompetencyLevel ?? 0) >= 4);
+    if (!hasLevel4Plus) return false;
+  }
+
   // 4. No overlapping shifts
   if (state.hasOverlapWith(staffInfo.id, newStart, newEnd)) return false;
 
-  // 5. Min rest between shifts (≥ 10 hours)
+  // 5a. Min rest before this shift — previous shift must have ended ≥ 10h ago
   const lastEnd = state.getLastShiftEndBefore(staffInfo.id, newStart);
   if (lastEnd) {
     const restHours = (newStart.getTime() - lastEnd.getTime()) / (1000 * 60 * 60);
     if (restHours < 10) return false;
+  }
+
+  // 5b. Min rest after this shift — next existing shift must start ≥ 10h after newEnd.
+  //     This catches the case where all nights are processed before days (by difficulty
+  //     ordering) and a staff already has a same-day night shift starting after newEnd.
+  const nextStart = state.getNextShiftStartAfter(staffInfo.id, newEnd);
+  if (nextStart) {
+    const restHoursAfter = (nextStart.getTime() - newEnd.getTime()) / (1000 * 60 * 60);
+    if (restHoursAfter < 10) return false;
   }
 
   // 6. Max consecutive days (cap at 5; staff preference may be lower)
@@ -107,6 +135,20 @@ export function getRejectionReasons(
   if (isICUUnit(shiftInfo.unit) && staffInfo.icuCompetencyLevel < 2)
     reasons.push("competency level too low for ICU/ER");
 
+  if (staffInfo.icuCompetencyLevel === 1) {
+    const hasLevel5 = state
+      .getShiftAssignments(shiftInfo.id)
+      .some((a) => (context.staffMap.get(a.staffId)?.icuCompetencyLevel ?? 0) === 5);
+    if (!hasLevel5) reasons.push("Level 1 novice needs a Level 5 preceptor on the shift first");
+  }
+
+  if (isICUUnit(shiftInfo.unit) && staffInfo.icuCompetencyLevel === 2) {
+    const hasLevel4Plus = state
+      .getShiftAssignments(shiftInfo.id)
+      .some((a) => (context.staffMap.get(a.staffId)?.icuCompetencyLevel ?? 0) >= 4);
+    if (!hasLevel4Plus) reasons.push("Level 2 on ICU/ER needs a Level 4+ supervisor on the shift first");
+  }
+
   if (state.hasOverlapWith(staffInfo.id, newStart, newEnd))
     reasons.push("overlapping shift already assigned");
 
@@ -115,6 +157,13 @@ export function getRejectionReasons(
     const restHours = (newStart.getTime() - lastEnd.getTime()) / (1000 * 60 * 60);
     if (restHours < 10)
       reasons.push(`insufficient rest (${restHours.toFixed(1)}h, need 10h)`);
+  }
+
+  const nextStart = state.getNextShiftStartAfter(staffInfo.id, newEnd);
+  if (nextStart) {
+    const restHoursAfter = (nextStart.getTime() - newEnd.getTime()) / (1000 * 60 * 60);
+    if (restHoursAfter < 10)
+      reasons.push(`next shift starts too soon after this one (${restHoursAfter.toFixed(1)}h gap, need 10h)`);
   }
 
   const maxConsec = Math.min(staffInfo.preferences?.maxConsecutiveDays ?? 5, 5);

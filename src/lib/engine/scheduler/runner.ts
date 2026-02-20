@@ -243,8 +243,35 @@ export async function runGenerationJob(jobId: string, scheduleId: string): Promi
     setProgress(jobId, 82, "Scoring Cost-Optimized schedule");
     const costScore = scoreFromDrafts(costResult.assignments, context);
 
-    // ── 5. Save alternative scenarios (snapshots only, not written to assignment table) ──
-    setProgress(jobId, 85, "Saving alternative scenarios");
+    // ── 5. Save all 3 scenarios (Balanced as selected, Fair/Cost as draft alternatives) ──
+    setProgress(jobId, 85, "Saving scenarios");
+
+    // BALANCED — already applied to assignment table; save as a scenario so the
+    // Scenarios page can display its score alongside the two alternatives.
+    db.insert(scenario)
+      .values({
+        scheduleId,
+        name: "Balanced",
+        description:
+          "Optimised across all dimensions (coverage, fairness, cost, preferences). " +
+          `${balancedResult.understaffed.length > 0 ? balancedResult.understaffed.length + " shift(s) understaffed." : "Full coverage achieved."}`,
+        overallScore: balancedScore.overall,
+        coverageScore: balancedScore.coverage,
+        fairnessScore: balancedScore.fairness,
+        costScore: balancedScore.cost,
+        preferenceScore: balancedScore.preference,
+        skillMixScore: balancedScore.skillMix,
+        assignmentSnapshot: balancedResult.assignments.map((a) => ({
+          shiftId: a.shiftId,
+          staffId: a.staffId,
+          isChargeNurse: a.isChargeNurse,
+          isOvertime: a.isOvertime,
+        })),
+        hardViolations: [],
+        softViolations: [],
+        status: "selected",
+      })
+      .run();
 
     db.insert(scenario)
       .values({

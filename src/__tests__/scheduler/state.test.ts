@@ -121,6 +121,45 @@ describe("SchedulerState", () => {
     });
   });
 
+  describe("getNextShiftStartAfter", () => {
+    it("returns null when no future assignments exist", () => {
+      const newEnd = shiftEndDateTime("2026-02-09", "07:00", 12); // 19:00 Feb 9
+      expect(state.getNextShiftStartAfter("s1", newEnd)).toBeNull();
+    });
+
+    it("returns the start of the next shift after newEnd", () => {
+      // Night shift Feb 9: 19:00 → 07:00 Feb 10
+      state.addAssignment(makeDraft({
+        staffId: "s1", date: "2026-02-09", startTime: "19:00",
+        shiftType: "night", endTime: "07:00", durationHours: 12, shiftId: "sh1",
+      }));
+      // newEnd = 19:00 Feb 9 (end of a hypothetical day shift on Feb 9)
+      const newEnd = shiftEndDateTime("2026-02-09", "07:00", 12);
+      const next = state.getNextShiftStartAfter("s1", newEnd);
+      expect(next).not.toBeNull();
+      expect(next!.getHours()).toBe(19); // night starts at 19:00
+      expect(next!.getDate()).toBe(9);
+    });
+
+    it("returns the earliest future shift when there are multiple", () => {
+      // Two future shifts: Feb 10 at 07:00 and Feb 11 at 07:00
+      state.addAssignment(makeDraft({ staffId: "s1", date: "2026-02-11", startTime: "07:00", shiftId: "sh2" }));
+      state.addAssignment(makeDraft({ staffId: "s1", date: "2026-02-10", startTime: "07:00", shiftId: "sh1" }));
+      const newEnd = shiftEndDateTime("2026-02-09", "07:00", 12); // 19:00 Feb 9
+      const next = state.getNextShiftStartAfter("s1", newEnd);
+      expect(next!.getDate()).toBe(10); // earliest is Feb 10
+    });
+
+    it("ignores shifts at exactly newEnd (uses >=, so same-time start is included)", () => {
+      // Shift starting exactly at newEnd
+      state.addAssignment(makeDraft({ staffId: "s1", date: "2026-02-09", startTime: "19:00", shiftId: "sh1" }));
+      const newEnd = shiftEndDateTime("2026-02-09", "07:00", 12); // 19:00 Feb 9
+      const next = state.getNextShiftStartAfter("s1", newEnd);
+      // 19:00 >= 19:00 → included (0h gap, which triggers rest violation in eligibility)
+      expect(next).not.toBeNull();
+    });
+  });
+
   describe("wouldExceedConsecutiveDays", () => {
     it("returns false for first assignment", () => {
       expect(state.wouldExceedConsecutiveDays("s1", "2026-02-09", 5)).toBe(false);

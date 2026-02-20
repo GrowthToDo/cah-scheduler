@@ -156,10 +156,57 @@ describe("passesHardRules", () => {
     expect(passesHardRules(lowComp, icuShift, state, ctx)).toBe(false);
   });
 
-  it("allows staff with competency ≥ 2 on an ICU shift", () => {
+  it("allows staff with competency ≥ 2 on an ICU shift when a Level 4+ is already there", () => {
+    const comp2 = makeStaff({ icuCompetencyLevel: 2 });
+    const icuShift = makeShift({ id: "icu-shift", unit: "ICU" });
+    // Pre-assign a Level 4 supervisor to the shift
+    const level4 = makeStaff({ id: "senior", icuCompetencyLevel: 4 });
+    ctx = makeContext({ staffMap: new Map([["staff-1", comp2], ["senior", level4]]) });
+    state.addAssignment({
+      shiftId: "icu-shift", staffId: "senior", date: "2026-02-09",
+      shiftType: "day", startTime: "07:00", endTime: "19:00", durationHours: 12,
+      unit: "ICU", isChargeNurse: false, isOvertime: false, isFloat: false, floatFromUnit: null,
+    });
+    expect(passesHardRules(comp2, icuShift, state, ctx)).toBe(true);
+  });
+
+  // Rule 3b: Level 1 requires Level 5 preceptor already on the shift
+  it("blocks Level 1 staff when no Level 5 preceptor is on the shift yet", () => {
+    const level1 = makeStaff({ icuCompetencyLevel: 1 });
+    expect(passesHardRules(level1, makeShift(), state, ctx)).toBe(false);
+  });
+
+  it("allows Level 1 staff when a Level 5 preceptor is already on the shift", () => {
+    const level1 = makeStaff({ icuCompetencyLevel: 1 });
+    const level5 = makeStaff({ id: "expert", icuCompetencyLevel: 5 });
+    ctx = makeContext({ staffMap: new Map([["staff-1", level1], ["expert", level5]]) });
+    state.addAssignment({
+      shiftId: "shift-1", staffId: "expert", date: "2026-02-09",
+      shiftType: "day", startTime: "07:00", endTime: "19:00", durationHours: 12,
+      unit: "Med-Surg", isChargeNurse: false, isOvertime: false, isFloat: false, floatFromUnit: null,
+    });
+    expect(passesHardRules(level1, makeShift(), state, ctx)).toBe(true);
+  });
+
+  // Rule 3c: Level 2 on ICU/ER requires Level 4+ already on the shift
+  it("blocks Level 2 on ICU shift when no Level 4+ supervisor is on the shift yet", () => {
     const comp2 = makeStaff({ icuCompetencyLevel: 2 });
     const icuShift = makeShift({ unit: "ICU" });
-    expect(passesHardRules(comp2, icuShift, state, ctx)).toBe(true);
+    // No one else on the shift yet
+    expect(passesHardRules(comp2, icuShift, state, ctx)).toBe(false);
+  });
+
+  it("blocks Level 2 on ICU shift when only Level 3 is assigned", () => {
+    const comp2 = makeStaff({ icuCompetencyLevel: 2 });
+    const level3 = makeStaff({ id: "mid", icuCompetencyLevel: 3 });
+    const icuShift = makeShift({ id: "icu-s", unit: "ICU" });
+    ctx = makeContext({ staffMap: new Map([["staff-1", comp2], ["mid", level3]]) });
+    state.addAssignment({
+      shiftId: "icu-s", staffId: "mid", date: "2026-02-09",
+      shiftType: "day", startTime: "07:00", endTime: "19:00", durationHours: 12,
+      unit: "ICU", isChargeNurse: false, isOvertime: false, isFloat: false, floatFromUnit: null,
+    });
+    expect(passesHardRules(comp2, icuShift, state, ctx)).toBe(false);
   });
 
   // Rule 4: No overlapping shifts
@@ -174,8 +221,8 @@ describe("passesHardRules", () => {
     expect(passesHardRules(makeStaff(), makeShift({ startTime: "10:00" }), state, ctx)).toBe(false);
   });
 
-  // Rule 5: Rest hours (≥10h)
-  it("blocks assignment that violates 10h rest rule", () => {
+  // Rule 5a: Backward rest hours (previous shift must end ≥10h before)
+  it("blocks assignment that violates 10h rest rule (backward)", () => {
     // Night shift ends at 07:00 on Feb 10
     state.addAssignment({
       shiftId: "sh1", staffId: "staff-1", date: "2026-02-09",
@@ -184,6 +231,32 @@ describe("passesHardRules", () => {
     });
     // Try to assign day shift Feb 10 07:00 → only 0h rest
     expect(passesHardRules(makeStaff(), makeShift({ date: "2026-02-10" }), state, ctx)).toBe(false);
+  });
+
+  // Rule 5b: Forward rest hours (the KEY bug fix — night shift processed first,
+  // day shift on the same date must be blocked even though night comes later in time)
+  it("blocks a day shift when the same staff already has a night shift on the same day (forward rest check)", () => {
+    // Night shift Feb 9: 19:00 → 07:00 Feb 10 (assigned first by difficulty ordering)
+    state.addAssignment({
+      shiftId: "sh-night", staffId: "staff-1", date: "2026-02-09",
+      shiftType: "night", startTime: "19:00", endTime: "07:00", durationHours: 12,
+      unit: "Med-Surg", isChargeNurse: false, isOvertime: false, isFloat: false, floatFromUnit: null,
+    });
+    // Now try to assign the day shift on Feb 9 (07:00-19:00).
+    // The backward rest check finds nothing (night ends Feb 10 07:00, not before Feb 9 07:00).
+    // The FORWARD rest check must catch: night starts at 19:00, which is 0h after day ends at 19:00.
+    expect(passesHardRules(makeStaff(), makeShift({ date: "2026-02-09" }), state, ctx)).toBe(false);
+  });
+
+  it("allows a day shift when the next shift starts ≥10h after it ends", () => {
+    // Next shift starts Feb 10 at 07:00 — which is 12h after Feb 9 day shift ends at 19:00
+    state.addAssignment({
+      shiftId: "sh-next", staffId: "staff-1", date: "2026-02-10",
+      shiftType: "day", startTime: "07:00", endTime: "19:00", durationHours: 12,
+      unit: "Med-Surg", isChargeNurse: false, isOvertime: false, isFloat: false, floatFromUnit: null,
+    });
+    // Feb 9 day shift ends 19:00; next shift starts Feb 10 07:00 → 12h gap → allowed
+    expect(passesHardRules(makeStaff(), makeShift({ date: "2026-02-09" }), state, ctx)).toBe(true);
   });
 
   it("allows assignment with exactly 10h rest", () => {

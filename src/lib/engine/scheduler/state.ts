@@ -169,6 +169,22 @@ export class SchedulerState {
     return weekendIds.size;
   }
 
+  /**
+   * Returns the start Date of the earliest existing assignment for `staffId`
+   * that begins at or after `newShiftEnd` (needed for forward rest-hours check).
+   */
+  getNextShiftStartAfter(staffId: string, newShiftEnd: Date): Date | null {
+    const list = this.assignmentsByStaff.get(staffId) ?? [];
+    let nextStart: Date | null = null;
+    for (const a of list) {
+      const aStart = toDateTime(a.date, a.startTime);
+      if (aStart.getTime() >= newShiftEnd.getTime()) {
+        if (!nextStart || aStart < nextStart) nextStart = aStart;
+      }
+    }
+    return nextStart;
+  }
+
   /** True if `staffId` has any existing assignment whose time overlaps [start, end). */
   hasOverlapWith(staffId: string, newStart: Date, newEnd: Date): boolean {
     for (const a of this.assignmentsByStaff.get(staffId) ?? []) {

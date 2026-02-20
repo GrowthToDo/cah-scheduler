@@ -191,10 +191,12 @@ describe("greedyConstruct", () => {
   });
 
   it("places harder-constrained ICU shifts before Med-Surg shifts", () => {
-    // Verify shift ordering by observing which shifts get filled first
-    // when there's only 1 qualified ICU staff (competency ≥ 2)
-    const icuStaff = makeStaff("icu-1", { icuCompetencyLevel: 2 });
-    const medSurgStaff = makeStaff("ms-1", { icuCompetencyLevel: 1 });
+    // Verify shift ordering by observing which shifts get filled first.
+    // Use Level 4 ICU staff — Level 4+ is the minimum to self-supervise an ICU slot
+    // (the new Pass 1.5 requires a Level 4+ present before any other ICU slots are filled).
+    const icuStaff = makeStaff("icu-1", { icuCompetencyLevel: 4 });
+    // Level 3 can work Med-Surg independently (Level 1 would need a preceptor)
+    const medSurgStaff = makeStaff("ms-1", { icuCompetencyLevel: 3 });
 
     const icuShift = makeShift("icu-sh", "2026-02-09", { unit: "ICU", requiredStaffCount: 1 });
     const medSurgShift = makeShift("ms-sh", "2026-02-09", { unit: "Med-Surg", requiredStaffCount: 1 });
