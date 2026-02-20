@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.2.4
-**Last Updated:** February 19, 2026
+**Document Version:** 1.3.0
+**Last Updated:** February 20, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -18,6 +18,7 @@
 9. [Assignment Attributes](#9-assignment-attributes)
 10. [Special Features](#10-special-features)
 11. [Application UI Guide](#11-application-ui-guide)
+12. [Scheduling Algorithm](#12-scheduling-algorithm)
 
 ---
 
@@ -504,6 +505,142 @@ Please review each section and note any changes needed:
 | 1.2.1 | Feb 15, 2026 | **Coverage auto-fill workflow:** Leave approval (> 7 days) now automatically finds top 3 replacement candidates instead of creating manual open shifts. Each candidate includes reasons (e.g., "Cross-trained for ICU", "High reliability"). Manager reviews and approves, assignment is auto-created. Renamed "Open Shifts" to "Coverage" in navigation. |
 | 1.2.2 | Feb 16, 2026 | **Census & Preferences visibility:** (1) Census input added to shift assignment dialog - determines required staffing via census bands; (2) Staff count display fixed to show scheduled/required based on census; (3) Staff detail dialog now shows shift preferences; (4) Census Bands added to Excel import/export |
 | 1.2.3 | Feb 18, 2026 | **Staff preferences in Excel:** Staff preferences can now be imported/exported via Excel. New columns in Staff sheet: Preferred Shift, Preferred Days Off, Max Consecutive Days, Max Hours Per Week, Avoid Weekends |
+| 1.3.0 | Feb 20, 2026 | **Section 12 added:** Scheduling Algorithm — describes greedy construction, local search, three weight profiles, hard rule eligibility, soft penalty scoring, understaffing handling, and audit behavior for automated schedule generation |
+
+---
+
+## 12. Scheduling Algorithm
+
+The CAH Scheduler includes an **automated scheduling engine** that generates a full schedule from scratch for a given schedule period. The engine runs from the **Generate Schedule** button on any schedule detail page and produces three independent schedule variants in the background.
+
+---
+
+### 12.1 Overview
+
+| Variant | Description | Disposition |
+|---------|-------------|-------------|
+| **Balanced** | Equal weight across all objectives | Written directly to the schedule's assignment table as the active draft |
+| **Fairness-Optimized** | Prioritises weekend equity, holiday fairness, and preference matching | Saved as an alternative scenario |
+| **Cost-Optimized** | Minimises overtime and float/agency use | Saved as an alternative scenario |
+
+Each variant is generated **fully independently** using the same two-phase algorithm with different penalty weight profiles. Managers compare variants on the Scenarios page and click **Apply** to switch the active schedule.
+
+> **Note:** Generating a new schedule wipes all existing assignments for that schedule and starts fresh.
+
+---
+
+### 12.2 Algorithm — Two Phases
+
+#### Phase 1: Greedy Construction
+
+Shifts are sorted by **constraint difficulty** (most constrained first, to maximise the chance of filling hard-to-fill slots before the candidate pool is depleted):
+
+1. ICU/ER shifts that also require a charge nurse
+2. All other ICU/ER shifts
+3. Night shifts
+4. Day and evening shifts
+5. On-call shifts (most flexible candidate pool, filled last)
+
+Within each group, earlier dates come first, then earlier start times.
+
+For each shift:
+1. If a **charge nurse slot** is required and not yet filled, a charge-qualified candidate is selected first.
+2. Remaining **staff slots** are filled one at a time.
+3. For each slot: filter all active staff through the **hard rule eligibility checks** (see §12.3), score the eligible candidates with the **soft penalty function** (see §12.4), and assign the **lowest-penalty candidate**.
+4. If no eligible candidate exists for a slot, the slot is left empty. The shift is recorded as **understaffed** with the most common hard rule rejection reasons.
+
+#### Phase 2: Local Search (Swap Improvement)
+
+Up to 500 random swap attempts are made between pairs of assignments on different shifts. A swap is accepted only if:
+- Both staff members pass all hard rules in their swapped positions
+- The total soft penalty of the schedule decreases
+
+This monotonic hill-climbing approach escapes greedy local optima without ever violating hard rules.
+
+---
+
+### 12.3 Hard Rule Eligibility Checks
+
+These are evaluated in the order shown. Failing any check immediately disqualifies the candidate for that shift — they are **never relaxed**.
+
+| # | Check | Details |
+|---|-------|---------|
+| 1 | **Approved leave** | Staff on approved leave for the shift date cannot be assigned |
+| 2 | **PRN availability** | Per-diem (PRN) staff must have submitted availability for this date |
+| 3 | **ICU/ER competency** | Shifts in ICU, ER, or ED units require `icuCompetencyLevel ≥ 2` |
+| 4 | **No overlapping shifts** | Staff cannot be on two shifts whose time windows overlap |
+| 5 | **Minimum rest (10 hours)** | At least 10 hours must separate the end of the previous shift and the start of this one |
+| 6 | **Max consecutive days (5)** | Cannot create a run of more than 5 consecutive working days. Reduced to a staff member's personal preference if that preference is lower. |
+| 7 | **60-hour rolling window** | Adding this shift must not push total hours in any 7-day window above 60h |
+| 8 | **On-call limits** | On-call shifts respect `maxOnCallPerWeek` and `maxOnCallWeekendsPerMonth` unit settings |
+
+If **all** remaining candidates fail hard rules for a given slot, that slot is left unfilled. The shift is flagged as understaffed with a summary of the most common rejection reasons, surfaced to the manager after generation.
+
+---
+
+### 12.4 Soft Rule Penalty Scoring
+
+Each eligible candidate receives a penalty score. Lower is better. Negative values are valid (used to incentivise assignments that improve fairness or skill mix). The candidate with the **lowest penalty** is selected.
+
+Each component is multiplied by the weight for that component in the active variant's weight profile.
+
+| Component | Incentive / Penalty | Condition |
+|-----------|---------------------|-----------|
+| **Overtime — heavy** | + `weight × (OT hours / 12)` | Total weekly hours would exceed 40 |
+| **Overtime — light** | + `weight × 0.3 × (extra hours / 12)` | Total would exceed FTE target but not 40h |
+| **Shift type mismatch** | + `weight × 0.5` | Candidate prefers a different shift type |
+| **Preferred day off** | + `weight × 0.7` | Shift falls on a day the staff prefers off |
+| **Weekend avoidance** | + `weight × 0.6` | Shift is on Sat/Sun and staff has `avoidWeekends = true` |
+| **Weekend incentive** | − `weight × 0.5` | Shift is a weekend shift and staff is below their required weekend count |
+| **Float — uncross-trained** | + `weight × 1.0` | Assigned outside home unit, not cross-trained there |
+| **Float — cross-trained** | + `weight × 0.3` | Assigned outside home unit, but cross-trained |
+| **Skill mix — all same** | + `weight × 0.6` | All staff on shift (including candidate) would share the same competency level |
+| **Skill mix — partial dup** | + `weight × 0.1` | Candidate's competency level already exists on shift, but mix is not uniform |
+| **Preceptor incentive** | − `weight × 0.8` | Candidate is Level 5 and a Level 1 is already on the shift |
+| **Level 2 supervision** | − `weight × 0.6` | Candidate is Level 4+ on an ICU/ER shift that has a Level 2 nurse |
+| **Charge clustering** | + `weight × 0.5` | Non-charge-candidate is charge-qualified, but shift already has a charge nurse |
+
+---
+
+### 12.5 Weight Profiles
+
+Three profiles are defined. Weights are multiplied by the per-component penalty constants above.
+
+| Weight | Balanced | Fairness-Optimized | Cost-Optimized |
+|--------|----------|--------------------|----------------|
+| `overtime` | 1.0 | 0.5 | **3.0** |
+| `preference` | 1.0 | **2.0** | 0.5 |
+| `weekendCount` | 1.0 | **3.0** | 1.0 |
+| `consecutiveWeekends` | 1.0 | **3.0** | 1.0 |
+| `holidayFairness` | 1.0 | **3.0** | 1.0 |
+| `skillMix` | 1.0 | 1.0 | 0.5 |
+| `float` | 1.0 | 0.5 | **3.0** |
+| `chargeClustering` | 1.0 | 1.0 | 0.5 |
+
+---
+
+### 12.6 Understaffing
+
+When a shift cannot be fully staffed (all candidates fail hard rules for a slot):
+- The slot is left **empty** — hard rules are never relaxed
+- The shift is recorded with: date, shift type, unit, slots required, slots filled, and most common rejection reasons
+- After generation, warnings are shown to the manager
+- The manager must resolve understaffed shifts manually (assign staff individually, contact an agency, etc.)
+
+---
+
+### 12.7 Audit Trail
+
+| Event | # Entries | Action | Details |
+|-------|-----------|--------|---------|
+| Schedule auto-generated | 3 (one per variant) | `schedule_auto_generated` | Variant type, assignment count, understaffed count, full score breakdown |
+| Scenario applied | 1 | `scenario_applied` | Scenario name, old assignment count, new assignment count |
+| Subsequent manual changes | Per-event | Existing behavior | Callouts, swaps, manual assignments continue to produce individual audit entries |
+
+The `assignmentSource` field on each assignment record distinguishes how the assignment was created:
+- `auto_generated` — created by the scheduling algorithm (Balanced variant)
+- `scenario_applied` — created when a manager applied an alternative scenario
+- `manual` — created by a manager through the assignment dialog
 
 ---
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,6 +61,7 @@ interface EvalResult {
 
 export default function ScheduleBuilderPage() {
   const params = useParams();
+  const router = useRouter();
   const scheduleId = params.id as string;
 
   const [schedule, setSchedule] = useState<ScheduleData | null>(null);
@@ -198,6 +199,13 @@ export default function ScheduleBuilderPage() {
           >
             {schedule.status}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/scenarios?scheduleId=${scheduleId}`)}
+          >
+            Generate Schedule
+          </Button>
           <Button variant="outline" size="sm" onClick={runEvaluation}>
             Re-evaluate
           </Button>

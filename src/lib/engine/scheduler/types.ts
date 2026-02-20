@@ -1,0 +1,67 @@
+import type {
+  ShiftInfo,
+  StaffInfo,
+  PRNAvailabilityInfo,
+  StaffLeaveInfo,
+  UnitConfig,
+  PublicHolidayInfo,
+} from "@/lib/engine/rules/types";
+
+export interface WeightProfile {
+  overtime: number;
+  preference: number;
+  weekendCount: number;
+  consecutiveWeekends: number;
+  holidayFairness: number;
+  skillMix: number;
+  float: number;
+  chargeClustering: number;
+}
+
+export interface AssignmentDraft {
+  shiftId: string;
+  staffId: string;
+  date: string;
+  shiftType: string;
+  startTime: string;
+  endTime: string;
+  durationHours: number;
+  unit: string;
+  isChargeNurse: boolean;
+  isOvertime: boolean;
+  isFloat: boolean;
+  floatFromUnit: string | null;
+}
+
+export interface UnderstaffedShift {
+  shiftId: string;
+  date: string;
+  shiftType: string;
+  unit: string;
+  required: number;
+  assigned: number;
+  reasons: string[];
+}
+
+export interface GenerationResult {
+  assignments: AssignmentDraft[];
+  understaffed: UnderstaffedShift[];
+}
+
+export interface SchedulerContext {
+  scheduleId: string;
+  /** All shift slots that need to be filled */
+  shifts: ShiftInfo[];
+  /** Flat list of all active staff */
+  staffList: StaffInfo[];
+  /** Staff lookup by ID */
+  staffMap: Map<string, StaffInfo>;
+  prnAvailability: PRNAvailabilityInfo[];
+  staffLeaves: StaffLeaveInfo[];
+  unitConfig: UnitConfig | null;
+  scheduleUnit: string;
+  publicHolidays: PublicHolidayInfo[];
+}
+
+// Re-export types from rules for convenience
+export type { ShiftInfo, StaffInfo, UnitConfig };

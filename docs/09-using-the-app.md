@@ -170,6 +170,7 @@ Required information:
 | See who's working a shift | Click on the shift |
 | Add an assignment | Click empty slot, select staff |
 | Remove an assignment | Click assignment, select "Remove" |
+| **Generate schedule automatically** | Click **"Generate Schedule"** button in the top-right |
 | Publish schedule | Click "Publish" button |
 
 ### Schedule Workflow
@@ -177,43 +178,72 @@ Required information:
 ```
 1. Create new schedule (set date range)
         ↓
-2. Generate initial assignments (auto or manual)
+2. Click "Generate Schedule" → system builds 3 variants automatically
         ↓
-3. Review and adjust
+3. Go to Scenarios page, compare variants and Apply your preferred one
         ↓
-4. Validate (check for rule violations)
+4. Return here and review the applied schedule
         ↓
-5. Publish (make visible to staff)
+5. Make manual adjustments if needed
+        ↓
+6. Publish (make visible to staff)
 ```
 
 ---
 
 ## Scenarios (`/scenarios`)
 
-**Purpose:** Compare different scheduling options.
+**Purpose:** Generate and compare different scheduling options, then choose the best one.
 
 ### What Is a Scenario?
 
-When creating a schedule, you might generate multiple options:
-- Scenario A: Minimizes overtime
-- Scenario B: Honors more preferences
-- Scenario C: Maximum coverage
+Every time you click **"Generate Schedule"**, the system automatically creates **three** complete schedule variants at once — each with a different priority:
+
+| Variant | Priority | Auto-applied? |
+|---------|----------|---------------|
+| **Balanced** | Equal weight across all goals | ✅ Yes — becomes the active draft immediately |
+| **Fairness-Optimized** | Maximises fair weekend/holiday distribution and preference matching | No — shown as an alternative |
+| **Cost-Optimized** | Minimises overtime and use of float/agency staff | No — shown as an alternative |
+
+The Balanced variant is applied to the schedule automatically. You can review the other two and **Apply** one if you prefer it.
 
 ### What You'll See
 
-- **Scenario List** - Each option with scores
-- **Score Breakdown** - Coverage, fairness, cost, etc.
-- **Violations** - Any rule violations per scenario
-- **Status** - Draft, Selected, Rejected
+- **Schedule dropdown** - Select which schedule to view scenarios for (auto-filled when you arrive from the Schedule page)
+- **Generate Schedule button** - Starts generation; shows a live progress bar while it runs
+- **Scenario cards** - One per variant, each showing score bars for Coverage, Fairness, Cost, Preference, and Skill Mix
+- **Overall score** - A single percentage summarising the variant's quality
+- **Status badge** - Draft (available), Active Schedule (currently applied), or Rejected
+- **Understaffing warnings** - If any shifts couldn't be fully staffed (shown after generation)
 
 ### Common Tasks
 
 | Task | How To |
 |------|--------|
-| Compare scenarios | View scores side-by-side |
-| See violations | Click into scenario detail |
-| Select a scenario | Click "Select" on the best one |
-| Reject a scenario | Click "Reject" |
+| Generate all three variants | Select a schedule, click "Generate Schedule" |
+| Watch generation progress | Progress bar and phase label appear automatically |
+| Compare variants | View score bars side-by-side on the cards |
+| Switch to a different variant | Click **"Apply"** on the card you prefer |
+| Dismiss a variant you don't want | Click **"Reject"** |
+| See understaffed shifts | Check the yellow warning panel after generation |
+
+### Understaffing Warnings
+
+If any shift could not be fully staffed (because every available nurse failed a hard rule), a warning panel appears listing:
+- Which shift (date, type, unit)
+- How many slots were filled vs. required
+- Why candidates were rejected (e.g., "on approved leave", "insufficient rest time")
+
+Review these with your team and assign the remaining slots manually from the Schedule page.
+
+### Score Bars Explained
+
+Each score bar shows 0–100% where **higher is better**:
+- **Coverage** — How many required slots were filled
+- **Fairness** — How evenly weekends and holidays are distributed
+- **Cost** — How little overtime and float/agency use is required
+- **Preference** — How well staff shift preferences are honoured
+- **Skill Mix** — How well competency levels are balanced across shifts
 
 ### Staff Calendar View
 
@@ -497,10 +527,11 @@ Review these checks before approving!
 ```
 1. Go to Schedule page
 2. Create new schedule (set dates)
-3. Generate assignments (or build manually)
-4. Go to Scenarios, review options
-5. Select best scenario
-6. Return to Schedule, click "Publish"
+3. Click "Generate Schedule" — system builds 3 variants in background
+4. Go to Scenarios page when generation completes
+5. Review score cards; click "Apply" on your preferred variant
+6. Return to Schedule, make any manual adjustments
+7. Click "Publish"
 ```
 
 ### Handling a Same-Day Callout
@@ -563,8 +594,8 @@ The application is organized around your workflow:
 1. **Setup** - Import data from Excel (first-time setup)
 2. **Dashboard** - Your starting point
 3. **Staff** - Who you're scheduling (click names for calendar view)
-4. **Schedule** - The main event (click issue badges for details)
-5. **Scenarios** - Options comparison
+4. **Schedule** - The main event; use "Generate Schedule" to auto-build, click issue badges for details
+5. **Scenarios** - Generate 3 variants, compare scores, Apply your preferred one
 6. **Callouts** - Handle absences
 7. **Coverage** - Review and approve replacement candidates
 8. **Leave** - Time-off requests (auto-creates open shifts when approved)

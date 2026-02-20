@@ -1,6 +1,8 @@
 import { db } from "@/db";
-import { schedule } from "@/db/schema";
+import { schedule, shiftDefinition, shift } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { buildShiftInserts } from "@/lib/schedules/build-shifts";
 
 export async function GET() {
   const schedules = db
@@ -13,6 +15,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
+  const unit = body.unit ?? "ICU";
 
   const newSchedule = db
     .insert(schedule)
@@ -20,12 +23,33 @@ export async function POST(request: Request) {
       name: body.name,
       startDate: body.startDate,
       endDate: body.endDate,
-      unit: body.unit ?? "ICU",
+      unit,
       status: "draft",
       notes: body.notes || null,
     })
     .returning()
     .get();
 
-  return NextResponse.json(newSchedule, { status: 201 });
+  // Auto-generate shift instances for every day in the date range
+  // using all active shift definitions that belong to this unit.
+  const definitions = db
+    .select()
+    .from(shiftDefinition)
+    .where(and(eq(shiftDefinition.unit, unit), eq(shiftDefinition.isActive, true)))
+    .all();
+
+  const inserts = buildShiftInserts(
+    newSchedule.id,
+    newSchedule.startDate,
+    newSchedule.endDate,
+    definitions
+  );
+  for (const values of inserts) {
+    db.insert(shift).values(values).run();
+  }
+
+  return NextResponse.json(
+    { ...newSchedule, shiftsCreated: definitions.length > 0 },
+    { status: 201 }
+  );
 }

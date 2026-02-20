@@ -6,6 +6,173 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.0] - 2026-02-20
+
+### Summary
+
+This release introduces **automated schedule generation** — the first fully algorithmic scheduling engine for the CAH Scheduler. A new "Generate Schedule" button runs three schedule variants in the background, writes the best variant directly to the schedule, and presents the other two as alternatives for manager review on the Scenarios page.
+
+---
+
+### New Feature: Automated Schedule Generation
+
+#### Overview
+
+Managers can now click **Generate Schedule** from any schedule's detail page. The system runs a two-phase greedy + local search algorithm across three weighted variants (Balanced, Fairness-Optimized, Cost-Optimized), each optimising different priorities while never violating hard scheduling rules.
+
+- **Balanced** (auto-applied): Equal weight across all scheduling objectives. Written directly to the schedule's assignment table as the starting draft.
+- **Fairness-Optimized**: Maximises weekend equity, holiday fairness, and preference matching. Saved as an alternative scenario.
+- **Cost-Optimized**: Minimises overtime and float/agency use. Saved as an alternative scenario.
+
+After generation, managers compare variants on the **Scenarios** page and click **Apply** to switch the active schedule to a different variant.
+
+---
+
+#### Algorithm Design
+
+**Phase 1 — Greedy Construction**
+
+Shifts are ordered by constraint difficulty (most constrained first):
+1. ICU/ER shifts requiring a charge nurse
+2. All other ICU/ER shifts
+3. Night shifts
+4. Day/evening shifts
+5. On-call shifts (most flexible pool, filled last)
+
+For each shift, the charge nurse slot (if required) is filled first using only charge-qualified candidates. Remaining slots are filled one at a time by filtering all eligible staff through hard rules, then scoring each candidate with soft rule penalties and selecting the lowest-penalty candidate.
+
+If no eligible staff exist for a slot — because every candidate fails at least one hard rule — the slot is left empty, the shift is marked as **understaffed**, and the reasons why each candidate was rejected are recorded for manager review.
+
+**Phase 2 — Local Search (Swap Improvement)**
+
+After greedy construction, up to 500 random swap attempts are made between pairs of assignments on different shifts. A swap is accepted only if:
+- Both staff members still pass all hard rules in their new positions
+- The total soft penalty score decreases (monotonic improvement; the algorithm never accepts a worse solution)
+
+This escapes greedy local optima without risking hard rule violations.
+
+---
+
+#### Hard Rules (Never Relaxed)
+
+These constraints are enforced as absolute eligibility filters. Violating any one blocks the assignment regardless of how many soft rule benefits the candidate would provide:
+
+| # | Rule | Description |
+|---|------|-------------|
+| 1 | Approved leave | Staff on approved leave cannot be assigned |
+| 2 | PRN availability | Per-diem staff must have submitted availability for the shift date |
+| 3 | ICU/ER competency | ICU, ER, and ED shifts require competency level ≥ 2 |
+| 4 | No overlap | Staff cannot be assigned to two overlapping shifts |
+| 5 | Minimum rest | At least 10 hours between the end of one shift and the start of the next |
+| 6 | Max consecutive days | No more than 5 consecutive working days (or staff's personal preference if lower) |
+| 7 | 60h rolling window | Total hours in any 7-day window must not exceed 60 |
+| 8 | On-call limits | Respects `maxOnCallPerWeek` and `maxOnCallWeekendsPerMonth` unit settings |
+
+---
+
+#### Soft Rule Penalty Scoring
+
+Each candidate is scored on a scale where lower = better (negative values are valid as incentives):
+
+| Component | Description |
+|-----------|-------------|
+| Overtime | Hours above 40/week penalised heavily; hours above FTE target but ≤40 penalised lightly |
+| Preference mismatch | Wrong shift type (×0.5), preferred day off (×0.7), weekend avoidance (×0.6) |
+| Weekend incentive | Negative penalty for staff below their weekend quota (encourages equitable distribution) |
+| Float | Penalty for assigning outside home unit; reduced if cross-trained |
+| Skill mix | Penalises all-same-competency-level shifts; incentivises adding a new level |
+| Competency pairing | Incentivises assigning a Level 5 when a Level 1 is present; Level 4+ when Level 2 is on ICU |
+| Charge clustering | Penalises extra charge-qualified nurses on shifts that already have a charge nurse |
+
+---
+
+#### Weight Profiles per Variant
+
+| Weight | Balanced | Fairness-Optimized | Cost-Optimized |
+|--------|----------|--------------------|----------------|
+| Overtime | 1.0 | 0.5 | **3.0** |
+| Preference | 1.0 | **2.0** | 0.5 |
+| Weekend count | 1.0 | **3.0** | 1.0 |
+| Consecutive weekends | 1.0 | **3.0** | 1.0 |
+| Holiday fairness | 1.0 | **3.0** | 1.0 |
+| Skill mix | 1.0 | 1.0 | 0.5 |
+| Float | 1.0 | 0.5 | **3.0** |
+| Charge clustering | 1.0 | 1.0 | 0.5 |
+
+---
+
+#### Understaffing Handling
+
+When a shift cannot be fully staffed because every remaining candidate fails at least one hard rule, the shift is left understaffed. The generation job records:
+- Which shifts were understaffed
+- How many slots were filled vs. required
+- The most common hard rule rejection reasons across the candidate pool
+
+These warnings are shown to the manager after generation completes. The manager reviews and resolves understaffed shifts manually.
+
+---
+
+#### Background Job & Progress Tracking
+
+Generation runs in the background after the HTTP response is returned (using `setImmediate`). The frontend polls for progress every 2 seconds and displays:
+- Current phase (e.g., "Building Balanced schedule…")
+- Progress percentage
+- Understaffed shift warnings when complete
+
+A `generation_job` database record tracks the full job lifecycle (pending → running → completed/failed), enabling recovery on page refresh.
+
+---
+
+#### Apply Scenario
+
+From the Scenarios page, managers can:
+- **Apply** — Replace all current assignments with the selected scenario's snapshot. Marks that scenario `selected` and all others `rejected`. Writes an audit log entry.
+- **Reject** — Dismiss a scenario without applying it.
+
+---
+
+#### Audit Trail
+
+| Event | Entries Created |
+|-------|-----------------|
+| Initial generation | 3 entries (one per variant) with action `schedule_auto_generated`. Includes assignment count, understaffed count, and score breakdown for each variant. |
+| Apply scenario | 1 entry with action `scenario_applied`. Logs old assignment count, new assignment count, and scenario name. |
+| Subsequent manual events | Existing per-event audit behavior (callouts, swaps, manual edits) is unchanged. |
+
+---
+
+### New Files
+
+| File | Description |
+|------|-------------|
+| `src/lib/engine/scheduler/types.ts` | Type definitions: `WeightProfile`, `AssignmentDraft`, `UnderstaffedShift`, `GenerationResult`, `SchedulerContext` |
+| `src/lib/engine/scheduler/state.ts` | `SchedulerState` class: O(1) mutable tracking for rest hours, consecutive days, weekly hours, weekend counts |
+| `src/lib/engine/scheduler/eligibility.ts` | `passesHardRules()` and `getRejectionReasons()` — 8 hard rule checks |
+| `src/lib/engine/scheduler/scoring.ts` | `softPenalty()` — 7-component soft rule scoring |
+| `src/lib/engine/scheduler/weight-profiles.ts` | `BALANCED`, `FAIR`, `COST_OPTIMIZED` weight profile constants |
+| `src/lib/engine/scheduler/greedy.ts` | `greedyConstruct()` — greedy construction phase |
+| `src/lib/engine/scheduler/local-search.ts` | `localSearch()` — swap-improvement phase |
+| `src/lib/engine/scheduler/index.ts` | Entry point: `buildSchedulerContext()`, `generateSchedule()` |
+| `src/lib/engine/scheduler/runner.ts` | `runGenerationJob()` — orchestrates 3 variants, writes DB, logs audit |
+| `src/app/api/scenarios/generate/status/route.ts` | **NEW** `GET /api/scenarios/generate/status` — job progress polling endpoint |
+| `src/__tests__/scheduler/state.test.ts` | **NEW** — 31 tests for `SchedulerState` |
+| `src/__tests__/scheduler/eligibility.test.ts` | **NEW** — 28 tests for hard rule eligibility checks |
+| `src/__tests__/scheduler/scoring.test.ts` | **NEW** — 17 tests for soft penalty scoring |
+| `src/__tests__/scheduler/greedy.test.ts` | **NEW** — 11 tests for greedy construction |
+| `src/__tests__/scheduler/local-search.test.ts` | **NEW** — 7 tests for local search improvement |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `src/db/schema.ts` | Added `generation_job` table; new audit actions (`schedule_auto_generated`, `scenario_applied`); new assignment source `scenario_applied` |
+| `src/app/api/scenarios/generate/route.ts` | Replaced stub with background job: validates schedule, rejects duplicate jobs (409), creates `generation_job` record, fires `setImmediate` |
+| `src/app/api/scenarios/[id]/route.ts` | Added `apply` action to `PUT` handler: deletes existing assignments, inserts snapshot, marks scenario selected, logs audit |
+| `src/app/scenarios/page.tsx` | Added polling progress bar, understaffed warnings panel, Apply/Reject buttons per scenario, `scheduleId` query param auto-selection |
+| `src/app/schedule/[id]/page.tsx` | Added "Generate Schedule" button navigating to Scenarios page with pre-selected schedule |
+
+---
+
 ## [1.3.3] - 2026-02-19
 
 ### Summary

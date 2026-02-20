@@ -481,6 +481,7 @@ export const assignment = sqliteTable(
         "float",
         "agency_manual", // When manager calls agency directly
         "pull_back", // When pulled back from float assignment
+        "scenario_applied", // When a scenario is applied to the schedule
       ],
     })
       .notNull()
@@ -738,6 +739,10 @@ export const exceptionLog = sqliteTable(
         "open_shift_created",
         "open_shift_filled",
         "open_shift_cancelled",
+        "schedule_auto_generated",
+        "scenario_applied",
+        "assignment_cancelled_for_leave",
+        "callout_created_for_leave",
       ],
     }).notNull(),
     description: text("description").notNull(),
@@ -792,6 +797,55 @@ export const staffHolidayAssignment = sqliteTable(
       table.holidayName,
       table.year
     ),
+  ]
+);
+
+// ============================================================
+// SCHEDULE GENERATION JOB
+// ============================================================
+export const generationJob = sqliteTable(
+  "generation_job",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    scheduleId: text("schedule_id")
+      .notNull()
+      .references(() => schedule.id, { onDelete: "cascade" }),
+    status: text("status", {
+      enum: ["pending", "running", "completed", "failed"],
+    })
+      .notNull()
+      .default("pending"),
+    // 0-100 progress percentage
+    progress: integer("progress").notNull().default(0),
+    // Human-readable description of current phase
+    currentPhase: text("current_phase"),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    // Error message if failed
+    error: text("error"),
+    // JSON array of understaffed shift warnings
+    warnings: text("warnings", { mode: "json" })
+      .$type<
+        {
+          shiftId: string;
+          date: string;
+          shiftType: string;
+          unit: string;
+          required: number;
+          assigned: number;
+          reasons: string[];
+        }[]
+      >()
+      .default([]),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("generation_job_schedule_idx").on(table.scheduleId),
+    index("generation_job_status_idx").on(table.status),
   ]
 );
 

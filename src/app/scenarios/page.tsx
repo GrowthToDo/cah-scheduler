@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,23 @@ interface Scenario {
   softViolations: unknown[];
 }
 
+interface JobStatus {
+  jobId: string;
+  status: "pending" | "running" | "completed" | "failed";
+  progress: number;
+  currentPhase: string | null;
+  error: string | null;
+  warnings: {
+    shiftId: string;
+    date: string;
+    shiftType: string;
+    unit: string;
+    required: number;
+    assigned: number;
+    reasons: string[];
+  }[];
+}
+
 function ScoreBar({ label, score }: { label: string; score: number | null }) {
   if (score === null) return null;
   const pct = Math.round((1 - score) * 100);
@@ -55,11 +73,16 @@ function ScoreBar({ label, score }: { label: string; score: number | null }) {
 }
 
 export default function ScenariosPage() {
+  const searchParams = useSearchParams();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>("");
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(
+    searchParams.get("scheduleId") ?? ""
+  );
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/schedules")
@@ -80,25 +103,60 @@ export default function ScenariosPage() {
     }
   }, [selectedScheduleId, fetchScenarios]);
 
+  // Stop polling when component unmounts
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  function startPolling(jobId: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`/api/scenarios/generate/status?jobId=${jobId}`);
+      const status: JobStatus = await res.json();
+      setJobStatus(status);
+
+      if (status.status === "completed" || status.status === "failed") {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        if (status.status === "completed" && selectedScheduleId) {
+          await fetchScenarios(selectedScheduleId);
+        }
+      }
+    }, 2000);
+  }
+
   async function handleGenerate() {
     if (!selectedScheduleId) return;
-    setGenerating(true);
-    await fetch("/api/scenarios/generate", {
+    setJobStatus({ jobId: "", status: "pending", progress: 0, currentPhase: "Starting…", error: null, warnings: [] });
+
+    const res = await fetch("/api/scenarios/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scheduleId: selectedScheduleId }),
     });
-    await fetchScenarios(selectedScheduleId);
-    setGenerating(false);
+
+    if (!res.ok) {
+      const err = await res.json();
+      setJobStatus((prev) => ({ ...prev!, status: "failed", error: err.error ?? "Unknown error" }));
+      return;
+    }
+
+    const { jobId } = await res.json();
+    setJobStatus((prev) => ({ ...prev!, jobId, status: "pending" }));
+    startPolling(jobId);
   }
 
-  async function handleSelect(id: string) {
-    await fetch(`/api/scenarios/${id}`, {
+  async function handleApply(scenarioId: string) {
+    setApplyingId(scenarioId);
+    await fetch(`/api/scenarios/${scenarioId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "selected" }),
+      body: JSON.stringify({ action: "apply" }),
     });
-    fetchScenarios(selectedScheduleId);
+    await fetchScenarios(selectedScheduleId);
+    setApplyingId(null);
   }
 
   async function handleReject(id: string) {
@@ -110,12 +168,16 @@ export default function ScenariosPage() {
     fetchScenarios(selectedScheduleId);
   }
 
+  const isGenerating =
+    jobStatus?.status === "pending" || jobStatus?.status === "running";
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Scenario Comparison</h1>
         <p className="mt-1 text-muted-foreground">
-          Compare and select schedule scenarios.
+          Generate and compare schedule variants. The Balanced schedule is applied
+          automatically; use Apply to switch to a different variant.
         </p>
       </div>
 
@@ -135,17 +197,62 @@ export default function ScenariosPage() {
 
         <Button
           onClick={handleGenerate}
-          disabled={!selectedScheduleId || generating}
+          disabled={!selectedScheduleId || isGenerating}
         >
-          {generating ? "Generating..." : "Generate Scenarios"}
+          {isGenerating ? "Generating…" : "Generate Schedule"}
         </Button>
       </div>
 
+      {/* Progress bar while generating */}
+      {isGenerating && jobStatus && (
+        <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium">
+              {jobStatus.currentPhase ?? "Working…"}
+            </span>
+            <span className="text-sm text-muted-foreground">{jobStatus.progress}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-muted">
+            <div
+              className="h-2 rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${jobStatus.progress}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Running 3 variants in parallel (Balanced, Fairness-Optimized, Cost-Optimized)…
+          </p>
+        </div>
+      )}
+
+      {/* Error state */}
+      {jobStatus?.status === "failed" && (
+        <div className="mb-6 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+          Generation failed: {jobStatus.error}
+        </div>
+      )}
+
+      {/* Understaffed warnings */}
+      {jobStatus?.status === "completed" && jobStatus.warnings.length > 0 && (
+        <div className="mb-6 rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+          <p className="mb-2 text-sm font-medium text-yellow-800">
+            {jobStatus.warnings.length} shift(s) could not be fully staffed
+          </p>
+          <ul className="space-y-1 text-xs text-yellow-700">
+            {jobStatus.warnings.map((w) => (
+              <li key={w.shiftId}>
+                {w.date} {w.shiftType} ({w.unit}): {w.assigned}/{w.required} filled
+                {w.reasons.length > 0 && ` — ${w.reasons.join("; ")}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {loading ? (
-        <p className="text-muted-foreground">Loading scenarios...</p>
-      ) : scenarios.length === 0 ? (
+        <p className="text-muted-foreground">Loading scenarios…</p>
+      ) : scenarios.length === 0 && !isGenerating ? (
         <p className="text-muted-foreground">
-          No scenarios yet. Select a schedule and generate scenarios.
+          No scenarios yet. Select a schedule and click Generate Schedule.
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -201,9 +308,10 @@ export default function ScenariosPage() {
                     <div className="flex gap-1">
                       <Button
                         size="sm"
-                        onClick={() => handleSelect(s.id)}
+                        onClick={() => handleApply(s.id)}
+                        disabled={applyingId === s.id}
                       >
-                        Select
+                        {applyingId === s.id ? "Applying…" : "Apply"}
                       </Button>
                       <Button
                         size="sm"
@@ -213,6 +321,9 @@ export default function ScenariosPage() {
                         Reject
                       </Button>
                     </div>
+                  )}
+                  {s.status === "selected" && (
+                    <span className="text-xs text-green-600 font-medium">Active schedule</span>
                   )}
                 </div>
               </CardContent>

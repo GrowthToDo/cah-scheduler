@@ -1,0 +1,119 @@
+import type { StaffInfo, ShiftInfo, UnitConfig } from "@/lib/engine/rules/types";
+import type { AssignmentDraft, WeightProfile } from "./types";
+import { SchedulerState } from "./state";
+import { isICUUnit } from "./eligibility";
+
+/**
+ * Computes the soft-rule penalty score for assigning `staffInfo` to `shiftInfo`
+ * given the current scheduler state.
+ *
+ * Lower score = better candidate.
+ * Negative values are valid and used to incentivize needed assignments
+ * (e.g., weekends for staff below their minimum).
+ */
+export function softPenalty(
+  staffInfo: StaffInfo,
+  shiftInfo: ShiftInfo,
+  state: SchedulerState,
+  weights: WeightProfile,
+  currentShiftAssignments: AssignmentDraft[],
+  staffMap: Map<string, StaffInfo>,
+  isChargeCandidate: boolean,
+  unitConfig: UnitConfig | null
+): number {
+  let penalty = 0;
+
+  // ── 1. Overtime ─────────────────────────────────────────────────────────────
+  const weekHours = state.getWeeklyHours(staffInfo.id, shiftInfo.date);
+  const fteTargetHours = (staffInfo.preferences?.maxHoursPerWeek ?? 40) * staffInfo.fte;
+  const newTotal = weekHours + shiftInfo.durationHours;
+
+  if (newTotal > 40) {
+    // Hours above 40 = overtime (high penalty)
+    const otHours = newTotal - Math.max(40, weekHours);
+    penalty += weights.overtime * (otHours / 12); // normalise per 12-h shift
+  } else if (newTotal > fteTargetHours && fteTargetHours < 40) {
+    // Hours above FTE target but still ≤40 = extra (low penalty)
+    const extraHours = newTotal - Math.max(fteTargetHours, weekHours);
+    if (extraHours > 0) penalty += weights.overtime * 0.3 * (extraHours / 12);
+  }
+
+  // ── 2. Preference mismatch ──────────────────────────────────────────────────
+  if (staffInfo.preferences) {
+    const { preferredShift, preferredDaysOff, avoidWeekends } = staffInfo.preferences;
+
+    if (preferredShift && preferredShift !== "any" && preferredShift !== shiftInfo.shiftType) {
+      penalty += weights.preference * 0.5;
+    }
+
+    const dayName = new Date(shiftInfo.date).toLocaleDateString("en-US", { weekday: "long" });
+    if (preferredDaysOff.includes(dayName)) {
+      penalty += weights.preference * 0.7;
+    }
+
+    if (avoidWeekends) {
+      const d = new Date(shiftInfo.date).getDay();
+      if (d === 0 || d === 6) penalty += weights.preference * 0.6;
+    }
+  }
+
+  // ── 3. Weekend count incentive ──────────────────────────────────────────────
+  // Negative penalty: encourage assigning staff who haven't met their weekend quota
+  const dayOfWeek = new Date(shiftInfo.date).getDay();
+  const isWeekendShift = dayOfWeek === 0 || dayOfWeek === 6;
+  if (isWeekendShift && !staffInfo.weekendExempt) {
+    const weekendCount = state.getWeekendCount(staffInfo.id);
+    const required = unitConfig?.weekendShiftsRequired ?? 3;
+    if (weekendCount < required) {
+      penalty -= weights.weekendCount * 0.5;
+    }
+  }
+
+  // ── 4. Float penalty ────────────────────────────────────────────────────────
+  if (staffInfo.homeUnit && staffInfo.homeUnit !== shiftInfo.unit) {
+    const isCrossTrained = (staffInfo.crossTrainedUnits ?? []).includes(shiftInfo.unit);
+    penalty += weights.float * (isCrossTrained ? 0.3 : 1.0);
+  }
+
+  // ── 5. Skill mix ────────────────────────────────────────────────────────────
+  const existingLevels = currentShiftAssignments
+    .map((a) => staffMap.get(a.staffId)?.icuCompetencyLevel ?? 0)
+    .filter((l) => l > 0);
+
+  if (existingLevels.length > 0) {
+    const alreadyHasLevel = existingLevels.includes(staffInfo.icuCompetencyLevel);
+    if (alreadyHasLevel) {
+      const allSame = existingLevels.every((l) => l === staffInfo.icuCompetencyLevel);
+      if (allSame) penalty += weights.skillMix * 0.6;
+      else penalty += weights.skillMix * 0.1; // slight penalty for any duplicate
+    }
+    // else: adding a new competency level to the mix → no penalty
+  }
+
+  // ── 6. Competency pairing incentives ────────────────────────────────────────
+  // Incentivise assigning a Level 5 when a Level 1 is already on the shift
+  const hasLevel1 = currentShiftAssignments.some(
+    (a) => staffMap.get(a.staffId)?.icuCompetencyLevel === 1
+  );
+  if (hasLevel1 && staffInfo.icuCompetencyLevel === 5) {
+    penalty -= weights.skillMix * 0.8; // strongly incentivise preceptor
+  }
+
+  // Incentivise Level 4+ when a Level 2 is already on an ICU/ER shift
+  const hasLevel2OnICU = isICUUnit(shiftInfo.unit) &&
+    currentShiftAssignments.some((a) => staffMap.get(a.staffId)?.icuCompetencyLevel === 2);
+  if (hasLevel2OnICU && staffInfo.icuCompetencyLevel >= 4) {
+    penalty -= weights.skillMix * 0.6;
+  }
+
+  // ── 7. Charge clustering ────────────────────────────────────────────────────
+  // Penalise assigning extra charge-qualified nurses to a shift that already has one
+  if (!isChargeCandidate && staffInfo.isChargeNurseQualified) {
+    const existingCharges = currentShiftAssignments.filter((a) => a.isChargeNurse).length;
+    if (existingCharges > 0) {
+      penalty += weights.chargeClustering * 0.5;
+    }
+  }
+
+  return penalty;
+}
