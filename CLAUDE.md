@@ -8,7 +8,7 @@ This file provides context and conventions for Claude Code when working in this 
 
 **CAH Scheduler** is a nurse scheduling application for Critical Access Hospitals (small rural hospitals, ≤25 beds). It automates complex staff scheduling while enforcing hard rules (safety/legal) and soft rules (fairness/preferences).
 
-- **Current version:** 1.3.2
+- **Current version:** 1.4.1
 - **GitHub:** https://github.com/GrowthToDo/cah-scheduler
 - **Local path:** D:\Pradeep\Personal\Projects\Nurse-scheduling
 
@@ -64,7 +64,17 @@ src/
     │   ├── rule-engine.ts  # Main rule evaluation orchestrator
     │   ├── rule-calculator.ts
     │   ├── census-calculator.ts
-    │   └── rules/          # 20+ individual rule evaluators
+    │   ├── rules/          # 20+ individual rule evaluators
+    │   └── scheduler/      # Auto-generation engine
+    │       ├── types.ts         # WeightProfile, AssignmentDraft, SchedulerContext
+    │       ├── state.ts         # SchedulerState (O(1) mutable tracking)
+    │       ├── eligibility.ts   # passesHardRules + getRejectionReasons
+    │       ├── scoring.ts       # softPenalty (7-component)
+    │       ├── weight-profiles.ts # BALANCED, FAIR, COST_OPTIMIZED
+    │       ├── greedy.ts        # greedyConstruct (phase 1)
+    │       ├── local-search.ts  # localSearch (phase 2, swap improvement)
+    │       ├── index.ts         # buildSchedulerContext + generateSchedule
+    │       └── runner.ts        # runGenerationJob (3 variants, writes DB)
     ├── callout/escalation.ts
     ├── coverage/find-candidates.ts
     ├── import/parse-excel.ts
@@ -146,7 +156,7 @@ npm run db:seed      # Seed test data (src/db/seed.ts)
 
 ### Hard Rules (13 — cannot be violated)
 - Minimum staff per shift (census-band-based)
-- Charge nurse requirement
+- Charge nurse requirement (**Level 4+ only**; Level 5 preferred, Level 4 stand-in)
 - Patient-to-nurse ratio
 - ≥10 hours rest between shifts
 - ≤5 consecutive working days
@@ -157,7 +167,7 @@ npm run db:seed      # Seed test data (src/db/seed.ts)
 - PRN staff can only work dates they submitted availability
 - Approved leave blocks scheduling
 - On-call limits (max 1/week, max 1 weekend/month)
-- Max 60 hours in any rolling 7-day period
+- Max 60 hours in any rolling 7-day period (all 7 windows checked, not just backward)
 
 ### Soft Rules (8 — scored with penalties)
 - Overtime (>40 h/week = HIGH penalty; extra ≤40 = LOW)
@@ -191,7 +201,8 @@ Full specification: `RULES_SPECIFICATION.md`
 | `shift_swap_request` | Staff swap requests |
 | `callout` | Absence + escalation tracking |
 | `open_shift` | Coverage requests (auto-recommended) |
-| `scenario` | Schedule scenarios for comparison |
+| `scenario` | Schedule scenarios for comparison (Balanced/Fair/Cost variants) |
+| `generation_job` | Background generation job tracking (pending/running/completed/failed) |
 | `staff_holiday_assignment` | Annual holiday fairness tracking |
 | `exception_log` | Full audit trail of all changes |
 
@@ -213,7 +224,7 @@ Full specification: `RULES_SPECIFICATION.md`
 
 - `RULES_SPECIFICATION.md` — Complete rule definitions
 - `CHANGELOG.md` — Feature history and migration notes
-- `docs/01-introduction.md` through `docs/10-glossary.md` — User-facing guides
+- `docs/01-introduction.md` through `docs/11-generating-schedules.md` — User-facing guides
 - `src/db/seed.ts` — Canonical example of test data structure
 
 ---
