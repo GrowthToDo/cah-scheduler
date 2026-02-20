@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const scheduleId = searchParams.get("scheduleId");
 
-  let query = db.select().from(scenario);
+  const query = db.select().from(scenario);
   const scenarios = scheduleId
     ? query.where(eq(scenario.scheduleId, scheduleId)).all()
     : query.all();

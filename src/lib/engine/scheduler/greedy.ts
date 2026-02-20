@@ -113,7 +113,7 @@ export function greedyConstruct(
 
   for (const shift of sortedShifts) {
     const required = shift.requiredStaffCount + shift.acuityExtraStaff;
-    let slotReasons: string[] = [];
+    const slotReasons: string[] = [];
 
     // ── Pass 1: Fill charge nurse slot ──────────────────────────────────────
     if (shift.requiresChargeNurse) {

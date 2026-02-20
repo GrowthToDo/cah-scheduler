@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
 
-  let conditions = [];
+  const conditions = [];
 
   if (staffId) {
     conditions.push(eq(staffLeave.staffId, staffId));

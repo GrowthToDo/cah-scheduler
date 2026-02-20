@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const scheduleId = searchParams.get("scheduleId");
   const staffId = searchParams.get("staffId");
 
-  let conditions = [];
+  const conditions = [];
 
   if (scheduleId) {
     conditions.push(eq(prnAvailability.scheduleId, scheduleId));

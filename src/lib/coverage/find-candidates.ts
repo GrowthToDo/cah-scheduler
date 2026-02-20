@@ -440,9 +440,9 @@ function shiftsOverlap(
     return h * 60 + m;
   };
 
-  let s1 = toMinutes(start1);
+  const s1 = toMinutes(start1);
   let e1 = toMinutes(end1);
-  let s2 = toMinutes(start2);
+  const s2 = toMinutes(start2);
   let e2 = toMinutes(end2);
 
   // Handle overnight shifts

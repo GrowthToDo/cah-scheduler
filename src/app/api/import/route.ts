@@ -2,6 +2,7 @@ import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { NextResponse } from "next/server";
 import { parseExcelFile, generateTemplate, type ImportResult } from "@/lib/import/parse-excel";
+import * as XLSX from "xlsx";
 
 // DELETE all existing data in correct order for FK constraints
 function deleteAllData() {
@@ -306,9 +307,6 @@ export async function GET() {
 
 // Export current database data to Excel
 function exportCurrentData(): ArrayBuffer {
-  // Dynamic import for xlsx
-  const XLSX = require("xlsx");
-
   // Query current data from database
   const staffData = db.select().from(schema.staff).all();
   const staffPreferencesData = db.select().from(schema.staffPreferences).all();

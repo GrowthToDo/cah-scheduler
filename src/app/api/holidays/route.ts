@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const year = searchParams.get("year");
 
-  let query = db.select().from(publicHoliday);
+  const query = db.select().from(publicHoliday);
 
   if (year) {
     const holidays = query

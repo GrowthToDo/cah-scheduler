@@ -48,7 +48,8 @@ const actionLabels: Record<string, string> = {
   manual_assignment: "Manual Assignment",
 };
 
-const actionColors: Record<string, string> = {
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link";
+const actionColors: Record<string, BadgeVariant> = {
   created: "default",
   updated: "secondary",
   deleted: "destructive",
@@ -149,9 +150,7 @@ export default function AuditPage() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={
-                          (actionColors[entry.action] as any) ?? "secondary"
-                        }
+                        variant={actionColors[entry.action] ?? "secondary"}
                       >
                         {actionLabels[entry.action] ?? entry.action}
                       </Badge>
