@@ -45,6 +45,8 @@ interface StaffOption {
   isChargeNurseQualified: boolean;
   reliabilityRating: number;
   isActive: boolean;
+  eligible: boolean;
+  ineligibleReasons: string[];
 }
 
 export function AssignmentDialog({
@@ -72,26 +74,14 @@ export function AssignmentDialog({
       // Set initial census value
       setCensusValue(shift.actualCensus?.toString() ?? "");
 
-      fetch("/api/staff")
+      // Fetch staff filtered through hard rules for this specific shift
+      fetch(`/api/shifts/${shift.id}/eligible-staff?scheduleId=${scheduleId}`)
         .then((r) => r.json())
-        .then((allStaff: StaffOption[]) => {
-          // Filter out already assigned staff and inactive
-          const assignedIds = new Set(shift.assignments.map((a) => a.staffId));
-          const available = allStaff.filter(
-            (s) => s.isActive && !assignedIds.has(s.id)
-          );
-          // Sort by: charge-qualified first, then by reliability, then competency
-          available.sort((a, b) => {
-            if (a.isChargeNurseQualified !== b.isChargeNurseQualified)
-              return a.isChargeNurseQualified ? -1 : 1;
-            if (a.reliabilityRating !== b.reliabilityRating)
-              return b.reliabilityRating - a.reliabilityRating;
-            return b.icuCompetencyLevel - a.icuCompetencyLevel;
-          });
-          setAvailableStaff(available);
+        .then((staff: StaffOption[]) => {
+          setAvailableStaff(staff);
         });
     }
-  }, [open, shift]);
+  }, [open, shift, scheduleId]);
 
   async function handleCensusUpdate() {
     if (!shift || !onCensusChange) return;
@@ -197,70 +187,118 @@ export function AssignmentDialog({
           )}
 
           {/* Available staff */}
-          <div>
-            <h3 className="mb-2 text-sm font-medium">Available Staff</h3>
-            {availableStaff.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No available staff to assign.
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {availableStaff.map((s) => {
-                  const employmentLabels: Record<string, string> = {
-                    full_time: "FT",
-                    part_time: "PT",
-                    per_diem: "PRN",
-                    float: "Float",
-                    agency: "Agency",
-                  };
+          {(() => {
+            const employmentLabels: Record<string, string> = {
+              full_time: "FT",
+              part_time: "PT",
+              per_diem: "PRN",
+              float: "Float",
+              agency: "Agency",
+            };
+            const eligible = availableStaff.filter((s) => s.eligible);
+            const ineligible = availableStaff.filter((s) => !s.eligible);
 
-                  return (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between rounded-md border px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">
-                          {s.firstName} {s.lastName}
-                        </span>
-                        <Badge variant="secondary" className="text-xs">
-                          {s.role}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {employmentLabels[s.employmentType] || s.employmentType}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Level {s.icuCompetencyLevel}/5
-                        </span>
-                        {s.isChargeNurseQualified && (
-                          <Badge variant="outline" className="text-xs">
-                            Charge RN
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex gap-1">
-                        {s.isChargeNurseQualified && needsCharge && (
-                          <Button
-                            size="sm"
-                            onClick={() => onAssign(shift.id, s.id, true)}
-                          >
-                            Assign as Charge
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onAssign(shift.id, s.id, false)}
+            return (
+              <>
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">
+                    Available Staff
+                    {eligible.length > 0 && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        {eligible.length} can be assigned
+                      </span>
+                    )}
+                  </h3>
+                  {eligible.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No staff available for this shift (all blocked by scheduling rules).
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {eligible.map((s) => (
+                        <div
+                          key={s.id}
+                          className="flex items-center justify-between rounded-md border px-3 py-2"
                         >
-                          Assign
-                        </Button>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {s.firstName} {s.lastName}
+                            </span>
+                            <Badge variant="secondary" className="text-xs">
+                              {s.role}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {employmentLabels[s.employmentType] || s.employmentType}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Level {s.icuCompetencyLevel}/5
+                            </span>
+                            {s.isChargeNurseQualified && (
+                              <Badge variant="outline" className="text-xs">
+                                Charge RN
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            {s.isChargeNurseQualified && needsCharge && (
+                              <Button
+                                size="sm"
+                                onClick={() => onAssign(shift.id, s.id, true)}
+                              >
+                                Assign as Charge
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onAssign(shift.id, s.id, false)}
+                            >
+                              Assign
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  )}
+                </div>
+
+                {ineligible.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-medium text-muted-foreground">
+                      Unavailable ({ineligible.length})
+                    </h3>
+                    <div className="space-y-1">
+                      {ineligible.map((s) => (
+                        <div
+                          key={s.id}
+                          className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 opacity-50"
+                        >
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">
+                                {s.firstName} {s.lastName}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">
+                                {s.role}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Level {s.icuCompetencyLevel}/5
+                              </span>
+                            </div>
+                            {s.ineligibleReasons.length > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {s.ineligibleReasons.join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </DialogContent>
     </Dialog>

@@ -256,7 +256,13 @@ export default function ScenariosPage() {
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {scenarios.map((s) => (
+          {scenarios.map((s) => {
+            const focus: Record<string, string> = {
+              "Balanced": "Balances all priorities equally",
+              "Fairness Optimized": "Maximises equal weekend & holiday distribution",
+              "Cost Optimized": "Minimises overtime and agency/float use",
+            };
+            return (
             <Card
               key={s.id}
               className={
@@ -279,9 +285,12 @@ export default function ScenariosPage() {
                         : "secondary"
                     }
                   >
-                    {s.status}
+                    {s.status === "selected" ? "active" : s.status}
                   </Badge>
                 </div>
+                {focus[s.name] && (
+                  <p className="text-xs font-medium text-primary/70">{focus[s.name]}</p>
+                )}
                 {s.description && (
                   <p className="text-xs text-muted-foreground">{s.description}</p>
                 )}
@@ -328,7 +337,8 @@ export default function ScenariosPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>

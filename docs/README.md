@@ -27,6 +27,9 @@ This documentation is written for **complete beginners**. You don't need to know
 8. **[Configuration](./08-configuration.md)** - Setting up units, holidays, and scheduling rules
 9. **[Using the Application](./09-using-the-app.md)** - Step-by-step guide to each page in the app
 
+### Generating Schedules
+11. **[Generating Schedules](./11-generating-schedules.md)** - How to auto-generate a full schedule, understand the three variants, and read the violations report
+
 ### Reference
 10. **[Glossary](./10-glossary.md)** - Quick definitions of all terms used in this guide
 
@@ -43,7 +46,7 @@ Introduction → Healthcare Basics → Understanding Staff → Understanding Shi
 Once you understand the concepts, move on to:
 
 ```
-Managing Requests → Handling Callouts → Configuration → Using the App
+Managing Requests → Handling Callouts → Configuration → Using the App → Generating Schedules
 ```
 
 Keep the **Glossary** handy for quick reference!
@@ -62,6 +65,14 @@ CAH Scheduler is a staff scheduling application designed for **Critical Access H
 
 This application helps nurse managers create fair, compliant, and cost-effective schedules while keeping staff happy and patients safe.
 
+### Key Features
+
+- **Auto-generate schedules** — Click "Generate Schedule" on any schedule and the system builds a full roster from scratch in seconds. Three variants are produced automatically: Balanced, Fairness-Optimized, and Cost-Optimized.
+- **Hard rule enforcement** — Constraints like rest hours, 60-hour weekly limits, competency requirements, and approved leave are *never* violated. If a shift can't be filled, it is flagged as understaffed rather than silently breaking a rule.
+- **Charge nurse rules** — Only Level 5 nurses (or Level 4 as a stand-in when no Level 5 is available) can be assigned as charge nurse. A Level 2 or Level 3 nurse cannot hold a charge role regardless of how their record is configured.
+- **Violations dashboard** — After generating or editing a schedule, the page shows a full breakdown of hard violations (must fix) and soft violations (schedule quality), with a per-staff view so you know exactly who is affected and why.
+- **Scenario comparison** — The two alternative variants are saved as scenarios you can review and apply at any time without regenerating.
+
 ---
 
 ## Need Help?
@@ -71,4 +82,4 @@ This application helps nurse managers create fair, compliant, and cost-effective
 
 ---
 
-*Last Updated: February 2026*
+*Last Updated: February 2026 — v1.4.0 (auto-generation, charge nurse competency, violations breakdown)*

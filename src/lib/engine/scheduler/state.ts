@@ -131,13 +131,75 @@ export class SchedulerState {
 
   /** Hours worked in the rolling 7-day window ending on (and including) `date`. */
   getRolling7DayHours(staffId: string, date: string): number {
-    const endDate = new Date(date);
     const startDate = new Date(date);
     startDate.setDate(startDate.getDate() - 6);
     const startStr = startDate.toISOString().slice(0, 10);
     return (this.assignmentsByStaff.get(staffId) ?? [])
       .filter((a) => a.date >= startStr && a.date <= date)
       .reduce((sum, a) => sum + a.durationHours, 0);
+  }
+
+  /**
+   * Returns true if adding a shift of `durationHours` on `date` would push ANY of
+   * the 7 rolling windows that contain `date` over `limit` hours.
+   *
+   * Why 7 windows?  The existing single-window backward check (ending at `date`) misses
+   * violations in windows that START before `date` and extend past it. Because the
+   * scheduler processes ICU shifts first, future shifts can already be in the state
+   * when an earlier date is checked — the backward window sees nothing, but the forward
+   * window [date … date+6] would expose the violation.
+   */
+  wouldExceed7DayHours(
+    staffId: string,
+    date: string,
+    durationHours: number,
+    limit: number
+  ): boolean {
+    const dateObj = new Date(date);
+    const assignments = this.assignmentsByStaff.get(staffId) ?? [];
+
+    // Windows containing `date` start from (date − 6) through date itself
+    for (let offset = 0; offset <= 6; offset++) {
+      const windowStart = new Date(dateObj);
+      windowStart.setDate(windowStart.getDate() - offset);
+      const windowEnd = new Date(windowStart);
+      windowEnd.setDate(windowEnd.getDate() + 6);
+      const startStr = windowStart.toISOString().slice(0, 10);
+      const endStr = windowEnd.toISOString().slice(0, 10);
+
+      const existing = assignments
+        .filter((a) => a.date >= startStr && a.date <= endStr)
+        .reduce((sum, a) => sum + a.durationHours, 0);
+
+      if (existing + durationHours > limit) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Returns the peak hours in any rolling 7-day window containing `date`.
+   * Used to build human-readable rejection messages.
+   */
+  getPeak7DayHours(staffId: string, date: string): number {
+    const dateObj = new Date(date);
+    const assignments = this.assignmentsByStaff.get(staffId) ?? [];
+    let peak = 0;
+
+    for (let offset = 0; offset <= 6; offset++) {
+      const windowStart = new Date(dateObj);
+      windowStart.setDate(windowStart.getDate() - offset);
+      const windowEnd = new Date(windowStart);
+      windowEnd.setDate(windowEnd.getDate() + 6);
+      const startStr = windowStart.toISOString().slice(0, 10);
+      const endStr = windowEnd.toISOString().slice(0, 10);
+
+      const hours = assignments
+        .filter((a) => a.date >= startStr && a.date <= endStr)
+        .reduce((sum, a) => sum + a.durationHours, 0);
+
+      if (hours > peak) peak = hours;
+    }
+    return peak;
   }
 
   /** Total number of weekend-day assignments for `staffId` so far. */

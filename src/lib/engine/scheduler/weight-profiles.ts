@@ -6,7 +6,7 @@ import type { WeightProfile } from "./types";
  */
 export const BALANCED: WeightProfile = {
   overtime: 1.0,
-  preference: 1.0,
+  preference: 1.5,   // raised from 1.0 — prefer staff who want this shift type / day
   weekendCount: 1.0,
   consecutiveWeekends: 1.0,
   holidayFairness: 1.0,

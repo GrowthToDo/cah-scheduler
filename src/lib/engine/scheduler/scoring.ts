@@ -57,15 +57,22 @@ export function softPenalty(
     }
   }
 
-  // ── 3. Weekend count incentive ──────────────────────────────────────────────
-  // Negative penalty: encourage assigning staff who haven't met their weekend quota
+  // ── 3. Weekend count equity ──────────────────────────────────────────────────
+  // Incentivise staff who haven't reached their required weekend count (bonus).
+  // Penalise assigning MORE weekends to staff who already met or exceeded quota so
+  // that the Fair variant actually produces lower weekend variance than Balanced/Cost.
   const dayOfWeek = new Date(shiftInfo.date).getDay();
   const isWeekendShift = dayOfWeek === 0 || dayOfWeek === 6;
   if (isWeekendShift && !staffInfo.weekendExempt) {
     const weekendCount = state.getWeekendCount(staffInfo.id);
     const required = unitConfig?.weekendShiftsRequired ?? 3;
     if (weekendCount < required) {
+      // Below quota: give a bonus so the algorithm fills required weekends first
       penalty -= weights.weekendCount * 0.5;
+    } else {
+      // At or above quota: penalise; penalty grows with how far over they already are
+      const excess = weekendCount - required;
+      penalty += weights.weekendCount * (0.4 + excess * 0.3);
     }
   }
 

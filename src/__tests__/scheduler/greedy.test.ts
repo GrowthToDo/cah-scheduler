@@ -109,7 +109,8 @@ describe("greedyConstruct", () => {
   });
 
   it("respects hard rule: fills charge nurse slot when requiresChargeNurse is true", () => {
-    const chargeNurse = makeStaff("charge-1", { isChargeNurseQualified: true });
+    // Charge nurse must be Level 4+ qualified
+    const chargeNurse = makeStaff("charge-1", { isChargeNurseQualified: true, icuCompetencyLevel: 5 });
     const regular = Array.from({ length: 4 }, (_, i) => makeStaff(`rn${i + 1}`, { isChargeNurseQualified: false }));
     const staff = [chargeNurse, ...regular];
     const shifts = [makeShift("sh1", "2026-02-09", { requiresChargeNurse: true, requiredStaffCount: 3 })];
@@ -119,6 +120,62 @@ describe("greedyConstruct", () => {
     const chargeAssignment = result.assignments.find((a) => a.isChargeNurse);
     expect(chargeAssignment).toBeDefined();
     expect(chargeAssignment!.staffId).toBe("charge-1");
+  });
+
+  it("never assigns a Level 2 nurse as charge even when isChargeNurseQualified is true", () => {
+    // Level 2 with charge flag set (bad data / legacy) — must be blocked as a hard rule.
+    // The shift slots are still filled by regular assignment; the missing charge nurse is
+    // then caught as a hard violation by the rule engine evaluator (not the scheduler).
+    const level2BadData = makeStaff("charge-l2", {
+      icuCompetencyLevel: 2,
+      isChargeNurseQualified: true,
+    });
+    const regularStaff = makeStaff("rn1");
+    const staff = [level2BadData, regularStaff];
+    const shifts = [makeShift("sh1", "2026-02-09", { requiresChargeNurse: true, requiredStaffCount: 2 })];
+    const ctx = makeContext(shifts, staff);
+    const result = greedyConstruct(ctx, BALANCED);
+
+    // Level 2 must NOT be assigned as charge
+    const level2Assignment = result.assignments.find((a) => a.staffId === "charge-l2");
+    expect(level2Assignment?.isChargeNurse).toBeFalsy();
+    // All staff slots are still filled (charge absence is a rule violation, not an understaffing gap)
+    expect(result.assignments.filter((a) => a.shiftId === "sh1")).toHaveLength(2);
+  });
+
+  it("prefers Level 5 over Level 4 for charge when both are eligible", () => {
+    // Level 5 = primary charge; Level 4 = stand-in. Level 5 should always win.
+    const level4Charge = makeStaff("charge-l4", {
+      icuCompetencyLevel: 4,
+      isChargeNurseQualified: true,
+    });
+    const level5Charge = makeStaff("charge-l5", {
+      icuCompetencyLevel: 5,
+      isChargeNurseQualified: true,
+    });
+    const staff = [level4Charge, level5Charge];
+    const shifts = [makeShift("sh1", "2026-02-09", { requiresChargeNurse: true, requiredStaffCount: 1 })];
+    const ctx = makeContext(shifts, staff);
+    const result = greedyConstruct(ctx, BALANCED);
+
+    const chargeAssignment = result.assignments.find((a) => a.isChargeNurse);
+    expect(chargeAssignment).toBeDefined();
+    expect(chargeAssignment!.staffId).toBe("charge-l5");
+  });
+
+  it("uses Level 4 as charge when no Level 5 is available", () => {
+    const level4Charge = makeStaff("charge-l4", {
+      icuCompetencyLevel: 4,
+      isChargeNurseQualified: true,
+    });
+    const regularStaff = makeStaff("rn1");
+    const shifts = [makeShift("sh1", "2026-02-09", { requiresChargeNurse: true, requiredStaffCount: 2 })];
+    const ctx = makeContext(shifts, [level4Charge, regularStaff]);
+    const result = greedyConstruct(ctx, BALANCED);
+
+    const chargeAssignment = result.assignments.find((a) => a.isChargeNurse);
+    expect(chargeAssignment).toBeDefined();
+    expect(chargeAssignment!.staffId).toBe("charge-l4");
   });
 
   it("records understaffed shift when not enough eligible staff", () => {

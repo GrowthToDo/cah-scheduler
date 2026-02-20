@@ -83,9 +83,11 @@ export function passesHardRules(
   const maxConsec = Math.min(staffInfo.preferences?.maxConsecutiveDays ?? 5, 5);
   if (state.wouldExceedConsecutiveDays(staffInfo.id, shiftInfo.date, maxConsec)) return false;
 
-  // 7. Max 60 hours in any rolling 7-day window
-  const rolling7 = state.getRolling7DayHours(staffInfo.id, shiftInfo.date);
-  if (rolling7 + shiftInfo.durationHours > 60) return false;
+  // 7. Max 60 hours in any rolling 7-day window.
+  // Checks all 7 windows containing shiftInfo.date — not just the backward window —
+  // to catch cases where already-assigned future shifts (placed first by the
+  // most-constrained-first ordering) would create an over-limit window.
+  if (state.wouldExceed7DayHours(staffInfo.id, shiftInfo.date, shiftInfo.durationHours, 60)) return false;
 
   // 8. On-call limits
   if (shiftInfo.shiftType === "on_call") {
@@ -170,9 +172,10 @@ export function getRejectionReasons(
   if (state.wouldExceedConsecutiveDays(staffInfo.id, shiftInfo.date, maxConsec))
     reasons.push(`would exceed ${maxConsec} consecutive days`);
 
-  const rolling7 = state.getRolling7DayHours(staffInfo.id, shiftInfo.date);
-  if (rolling7 + shiftInfo.durationHours > 60)
-    reasons.push(`would exceed 60h in 7 days (currently ${rolling7}h)`);
+  if (state.wouldExceed7DayHours(staffInfo.id, shiftInfo.date, shiftInfo.durationHours, 60)) {
+    const peak = state.getPeak7DayHours(staffInfo.id, shiftInfo.date);
+    reasons.push(`would exceed 60h in 7 days (peak window currently ${peak}h)`);
+  }
 
   if (shiftInfo.shiftType === "on_call") {
     const maxPerWeek = context.unitConfig?.maxOnCallPerWeek ?? 1;

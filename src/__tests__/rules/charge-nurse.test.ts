@@ -15,9 +15,10 @@ describe("charge-nurse rule", () => {
     expect(chargeNurseRule.evaluate(ctx)).toHaveLength(0);
   });
 
-  it("passes when shift has a qualified charge nurse", () => {
+  it("passes when shift has a Level 5 qualified charge nurse", () => {
     const shift = makeShift({ id: "s1", requiresChargeNurse: true });
-    const staff = makeStaff({ id: "staff-1", isChargeNurseQualified: true });
+    // Level 5 = primary charge nurse
+    const staff = makeStaff({ id: "staff-1", isChargeNurseQualified: true, icuCompetencyLevel: 5 });
     const a1 = makeAssignment({ id: "a1", shiftId: "s1", staffId: "staff-1", isChargeNurse: true });
     const ctx = makeContext({
       shiftMap: new Map([["s1", shift]]),
@@ -25,6 +26,34 @@ describe("charge-nurse rule", () => {
       assignments: [a1],
     });
     expect(chargeNurseRule.evaluate(ctx)).toHaveLength(0);
+  });
+
+  it("passes when shift has a Level 4 qualified charge nurse (stand-in)", () => {
+    const shift = makeShift({ id: "s1", requiresChargeNurse: true });
+    // Level 4 = stand-in charge when no Level 5 available
+    const staff = makeStaff({ id: "staff-1", isChargeNurseQualified: true, icuCompetencyLevel: 4 });
+    const a1 = makeAssignment({ id: "a1", shiftId: "s1", staffId: "staff-1", isChargeNurse: true });
+    const ctx = makeContext({
+      shiftMap: new Map([["s1", shift]]),
+      staffMap: new Map([["staff-1", staff]]),
+      assignments: [a1],
+    });
+    expect(chargeNurseRule.evaluate(ctx)).toHaveLength(0);
+  });
+
+  it("flags a Level 2 or 3 nurse assigned as charge even with isChargeNurseQualified flag", () => {
+    const shift = makeShift({ id: "s1", requiresChargeNurse: true });
+    // Level 3 with the flag set — bad data or legacy; must still be a violation
+    const staff = makeStaff({ id: "staff-1", isChargeNurseQualified: true, icuCompetencyLevel: 3 });
+    const a1 = makeAssignment({ id: "a1", shiftId: "s1", staffId: "staff-1", isChargeNurse: true });
+    const ctx = makeContext({
+      shiftMap: new Map([["s1", shift]]),
+      staffMap: new Map([["staff-1", staff]]),
+      assignments: [a1],
+    });
+    const violations = chargeNurseRule.evaluate(ctx);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].ruleId).toBe("charge-nurse");
   });
 
   it("flags when charge nurse is not qualified even if flagged as charge", () => {
@@ -67,10 +96,10 @@ describe("charge-nurse rule", () => {
     expect(chargeNurseRule.evaluate(ctx)).toHaveLength(0);
   });
 
-  it("passes when at least one among multiple staff is qualified charge nurse", () => {
+  it("passes when at least one among multiple staff is a Level 4+ qualified charge nurse", () => {
     const shift = makeShift({ id: "s1", requiresChargeNurse: true });
-    const staff1 = makeStaff({ id: "staff-1", isChargeNurseQualified: false });
-    const staff2 = makeStaff({ id: "staff-2", isChargeNurseQualified: true });
+    const staff1 = makeStaff({ id: "staff-1", isChargeNurseQualified: false, icuCompetencyLevel: 3 });
+    const staff2 = makeStaff({ id: "staff-2", isChargeNurseQualified: true, icuCompetencyLevel: 5 });
     const a1 = makeAssignment({ id: "a1", shiftId: "s1", staffId: "staff-1", isChargeNurse: false });
     const a2 = makeAssignment({ id: "a2", shiftId: "s1", staffId: "staff-2", isChargeNurse: true });
     const ctx = makeContext({

@@ -122,14 +122,18 @@ export function greedyConstruct(
         const eligible = activeStaff.filter(
           (s) =>
             s.isChargeNurseQualified &&
+            s.icuCompetencyLevel >= 4 && // Hard rule: charge requires Level 4+ competency
             !state.getShiftAssignments(shift.id).some((a) => a.staffId === s.id) &&
             passesHardRules(s, shift, state, context)
         );
 
         if (eligible.length > 0) {
+          // Prefer Level 5 (primary charge) over Level 4 (stand-in charge when no Level 5 available)
+          const level5Pool = eligible.filter((s) => s.icuCompetencyLevel === 5);
+          const topTier = level5Pool.length > 0 ? level5Pool : eligible;
           const currentSlotAssignments = state.getShiftAssignments(shift.id);
           const best = pickBest(
-            eligible,
+            topTier,
             shift,
             state,
             weights,
@@ -174,7 +178,13 @@ export function greedyConstruct(
             false,
             context
           );
-          const draft = buildDraft(best, shift, false, state);
+          // If the shift still needs a charge nurse and this Level 4+ is charge-qualified,
+          // designate them as charge — satisfies supervision AND charge requirement at once.
+          const stillNeedsCharge =
+            shift.requiresChargeNurse &&
+            !state.getShiftAssignments(shift.id).some((a) => a.isChargeNurse);
+          const assignAsCharge = stillNeedsCharge && best.isChargeNurseQualified;
+          const draft = buildDraft(best, shift, assignAsCharge, state);
           assignments.push(draft);
           state.addAssignment(draft);
         } else {

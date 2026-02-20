@@ -17,7 +17,14 @@ export const chargeNurseRule: RuleEvaluator = {
 
       const hasChargeNurse = shiftAssignments.some((a) => {
         const staff = context.staffMap.get(a.staffId);
-        return a.isChargeNurse && staff?.isChargeNurseQualified;
+        // Valid charge: flagged as charge on this assignment, nurse is charge-qualified,
+        // AND has Level 4+ competency (Level 5 = primary charge; Level 4 = stand-in).
+        // Level 1–3 cannot be charge regardless of the isChargeNurseQualified flag.
+        return (
+          a.isChargeNurse &&
+          staff?.isChargeNurseQualified === true &&
+          (staff?.icuCompetencyLevel ?? 0) >= 4
+        );
       });
 
       if (!hasChargeNurse && shiftAssignments.length > 0) {

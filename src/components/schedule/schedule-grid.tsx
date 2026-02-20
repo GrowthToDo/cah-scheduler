@@ -41,9 +41,10 @@ interface ScheduleGridProps {
   onViolationsClick?: (shift: ShiftData, violations: RuleViolation[]) => void;
   violations: Map<string, string[]>;
   violationDetails?: Map<string, RuleViolation[]>;
+  softViolations?: Map<string, string[]>;
 }
 
-export function ScheduleGrid({ shifts, onShiftClick, onViolationsClick, violations, violationDetails }: ScheduleGridProps) {
+export function ScheduleGrid({ shifts, onShiftClick, onViolationsClick, violations, violationDetails, softViolations }: ScheduleGridProps) {
   // Group shifts by date
   const dateGroups = new Map<string, ShiftData[]>();
   for (const s of shifts) {
@@ -101,6 +102,7 @@ export function ScheduleGrid({ shifts, onShiftClick, onViolationsClick, violatio
                             : undefined
                         }
                         violations={violations.get(shiftData.id) ?? []}
+                        softViolationCount={softViolations?.get(shiftData.id)?.length ?? 0}
                       />
                     ) : (
                       <span className="text-muted-foreground">-</span>
@@ -121,24 +123,29 @@ function ShiftCell({
   onClick,
   onViolationsClick,
   violations,
+  softViolationCount,
 }: {
   shift: ShiftData;
   onClick: () => void;
   onViolationsClick?: () => void;
   violations: string[];
+  softViolationCount: number;
 }) {
   const staffCount = shift.assignments.length;
   const isFull = staffCount >= shift.requiredStaffCount;
   const hasCharge = shift.assignments.some((a) => a.isChargeNurse);
-  const hasViolations = violations.length > 0;
+  const hasHardViolations = violations.length > 0;
+  const hasSoftViolations = softViolationCount > 0;
 
   let borderColor = "border-border";
-  if (hasViolations) {
+  if (hasHardViolations) {
     borderColor = "border-red-400";
+  } else if (hasSoftViolations) {
+    borderColor = "border-yellow-400";
   } else if (isFull && (!shift.requiresChargeNurse || hasCharge)) {
     borderColor = "border-green-400";
   } else if (staffCount > 0) {
-    borderColor = "border-yellow-400";
+    borderColor = "border-orange-300";
   }
 
   return (
@@ -150,18 +157,31 @@ function ShiftCell({
         <span className="text-xs text-muted-foreground">
           {staffCount}/{shift.requiredStaffCount} staff
         </span>
-        {hasViolations && (
-          <Badge
-            variant="destructive"
-            className="text-[10px] px-1 py-0 cursor-pointer hover:bg-red-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViolationsClick?.();
-            }}
-          >
-            {violations.length} issue{violations.length > 1 ? "s" : ""}
-          </Badge>
-        )}
+        <div className="flex gap-1">
+          {hasHardViolations && (
+            <Badge
+              variant="destructive"
+              className="text-[10px] px-1 py-0 cursor-pointer hover:bg-red-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViolationsClick?.();
+              }}
+            >
+              {violations.length} hard
+            </Badge>
+          )}
+          {hasSoftViolations && (
+            <Badge
+              className="text-[10px] px-1 py-0 bg-yellow-500 text-white cursor-pointer hover:bg-yellow-600"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViolationsClick?.();
+              }}
+            >
+              {softViolationCount} soft
+            </Badge>
+          )}
+        </div>
       </div>
       <div className="space-y-0.5">
         {shift.assignments.map((a) => (

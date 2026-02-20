@@ -215,7 +215,7 @@ export async function runGenerationJob(jobId: string, scheduleId: string): Promi
 
     // ── 2. Generate BALANCED variant ──────────────────────────────────────
     setProgress(jobId, 10, "Building Balanced schedule");
-    const balancedResult = generateSchedule(scheduleId, BALANCED, 500);
+    const balancedResult = generateSchedule(scheduleId, BALANCED, 1500);
 
     setProgress(jobId, 38, "Writing Balanced schedule to database");
     writeAssignments(balancedResult.assignments, scheduleId, context);
@@ -233,13 +233,13 @@ export async function runGenerationJob(jobId: string, scheduleId: string): Promi
 
     // ── 3. Generate FAIR variant ──────────────────────────────────────────
     setProgress(jobId, 45, "Building Fairness-Optimized schedule");
-    const fairResult = generateSchedule(scheduleId, FAIR, 500);
+    const fairResult = generateSchedule(scheduleId, FAIR, 1500);
     setProgress(jobId, 62, "Scoring Fairness-Optimized schedule");
     const fairScore = scoreFromDrafts(fairResult.assignments, context);
 
     // ── 4. Generate COST variant ──────────────────────────────────────────
     setProgress(jobId, 65, "Building Cost-Optimized schedule");
-    const costResult = generateSchedule(scheduleId, COST_OPTIMIZED, 500);
+    const costResult = generateSchedule(scheduleId, COST_OPTIMIZED, 1000);
     setProgress(jobId, 82, "Scoring Cost-Optimized schedule");
     const costScore = scoreFromDrafts(costResult.assignments, context);
 

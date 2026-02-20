@@ -1,0 +1,127 @@
+# Generating Schedules
+
+This guide explains how to use the automatic schedule generator, understand the three schedule variants it produces, and read the violations report so you can fix any issues.
+
+---
+
+## What Is Auto-Generation?
+
+Instead of manually assigning each nurse to each shift one by one, the scheduler can build a complete roster automatically. You click one button, wait a few seconds, and a full 6-week schedule appears — filled using the same hard rules and staff preferences the system always enforces.
+
+Auto-generation does **not** guess or take shortcuts. Every assignment it makes passes all the same hard rules you'd apply manually: rest hours, weekly hour limits, competency requirements, leave periods, and more. If a slot genuinely cannot be filled without breaking a rule, it is left empty and flagged for your attention.
+
+---
+
+## How to Generate a Schedule
+
+1. Open any schedule (or create one via the Excel import flow).
+2. Click the **Generate Schedule** button in the top-right corner of the schedule page.
+3. You will be taken to the **Scenarios** page, which shows a progress bar while the system works.
+4. Generation typically takes 5–15 seconds for a 6-week schedule.
+5. When complete, the schedule is immediately updated with the Balanced variant, and two alternative scenarios appear on the Scenarios page.
+
+> **Note:** Generating a new schedule replaces all existing assignments. If you have manual changes you want to keep, do not regenerate — use the assignment dialog to make individual edits instead.
+
+---
+
+## The Three Variants
+
+Every generation run produces three independent schedules, each optimised for a different priority:
+
+| Variant | What it optimises for |
+|---|---|
+| **Balanced** | A reasonable mix of fairness, cost, and staff preferences. This is applied to the schedule automatically. |
+| **Fairness-Optimized** | Spreads weekend shifts, holidays, and preferred days off as evenly as possible across all staff. May use slightly more overtime to achieve this. |
+| **Cost-Optimized** | Minimises overtime and float assignments. Some staff may work shifts they prefer less if it avoids extra pay. |
+
+All three variants obey exactly the same hard rules — only their *preferences and trade-offs* differ.
+
+### Applying an Alternative Variant
+
+If you prefer the Fairness or Cost variant over the default Balanced one:
+
+1. Go to the **Scenarios** page for your schedule.
+2. Find the variant you want (labelled "Fair" or "Cost").
+3. Click **Apply**. This replaces the current assignments with the scenario's roster.
+4. The schedule page refreshes automatically.
+
+---
+
+## Reading the Violations Report
+
+After generation (or after any manual edits), the schedule page shows a summary of violations above the grid.
+
+### Hard Violations — Must Fix
+
+Shown in **red**. These represent situations that are unsafe or non-compliant — for example, a shift with too few staff, or a charge nurse requirement that could not be met. The schedule should not be published with any hard violations outstanding.
+
+- Each red entry shows the rule that was broken and how many shifts are affected.
+- Click any **red-bordered shift** in the grid to open the assignment dialog and fix it manually.
+
+### Soft Violations — Schedule Quality
+
+Shown in **yellow**. These are not rule breaches but indicate that the schedule is not ideal — for example, a nurse is working a shift type they prefer to avoid, or the weekend count is slightly uneven.
+
+The soft violations panel shows two breakdowns:
+
+**By rule** — which optimisation rules fired and how many times. Common ones include:
+- *Preference Match* — staff assigned to a shift type, day, or weekend they prefer to avoid
+- *Weekend Fairness* — one staff member has significantly more weekend shifts than others
+- *Overtime* — a nurse's hours exceed their FTE target for the week
+
+**Affected staff** — every nurse who has at least one soft violation, sorted by how many they have. This tells you at a glance who is most impacted. For example:
+
+```
+Alice Smith    8 violations
+  Preference Match · Weekend Fairness
+
+Bob Jones      3 violations
+  Overtime
+```
+
+A small number of soft violations is normal and unavoidable — especially preference mismatches on ICU shifts where competency requirements limit which staff can work. If the count is high, consider regenerating with the Fairness-Optimized variant or manually swapping the most-affected staff members.
+
+---
+
+## What Happens If a Shift Can't Be Filled?
+
+If no eligible staff member exists for a slot — because everyone is on leave, on another shift, or at their hour limit — the system leaves the slot empty rather than breaking a hard rule. This is called an **understaffed shift**.
+
+Understaffed shifts appear with an orange border in the grid and show a "0/N staff" indicator. The hard violations panel will list them under a "Minimum Staffing" entry.
+
+To fix an understaffed shift:
+1. Click the shift in the grid.
+2. The assignment dialog shows you which staff are eligible and any who were excluded (with the reason).
+3. Assign a staff member manually, or consider whether on-call or per-diem staff can cover the gap.
+
+---
+
+## Charge Nurse Rules
+
+A charge nurse is the senior nurse who takes clinical and administrative responsibility for a shift. The scheduler enforces strict rules:
+
+- **Level 5** nurses are the primary charge nurses. Whenever possible, a Level 5 is assigned to the charge role.
+- **Level 4** nurses can serve as a stand-in charge nurse when no Level 5 is available.
+- **Level 1, 2, or 3** nurses can **never** be assigned as charge, even if their staff record has the charge-qualified flag set. The system ignores that flag for anyone below Level 4.
+
+If a shift requires a charge nurse but no Level 4 or Level 5 nurse is eligible (all are on leave, at their hour limit, etc.), the charge slot will be empty and a hard violation will be raised.
+
+---
+
+## Frequently Asked Questions
+
+**Can I run generation more than once?**
+Yes. Each run replaces the previous assignments and creates fresh scenarios. Previous scenarios are deleted.
+
+**Does generation affect leave, callouts, or PRN availability?**
+No. Generation reads those records and respects them as constraints, but it does not modify them.
+
+**Why are there so many preference soft violations?**
+On ICU and ER shifts, competency requirements mean only a subset of staff are eligible. When the eligible pool is small, some nurses will inevitably be assigned to shifts that don't match their preferences. The Fairness-Optimized variant may distribute these mismatches more evenly.
+
+**Can I mix auto-generated and manual assignments?**
+Yes. After generation, you can open any shift and add, remove, or change assignments individually. Those changes are preserved unless you regenerate.
+
+---
+
+*Last Updated: February 2026*
