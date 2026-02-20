@@ -1,6 +1,6 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.3.0
+**Document Version:** 1.4.0
 **Last Updated:** February 20, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
@@ -46,8 +46,8 @@
 | **1** | Novice/Orientee | New hire in orientation period | Cannot take patients alone. Must be paired with Level 5 preceptor. FTE contribution = 0 for staffing calculations. |
 | **2** | Advanced Beginner | Can handle stable patients | Can take Med-Surg/Swing Bed patients. Cannot work ICU/ER alone - must have Level 4+ supervisor on same shift. |
 | **3** | Competent | Fully functional nurse | Can take standard ICU/ER patient load. Should have ACLS/PALS certification. |
-| **4** | Proficient (Trauma Ready) | Experienced, can handle critical situations | TNCC certified. Can handle Codes/Trauma alone until backup arrives. |
-| **5** | Expert (Charge/Preceptor) | Most experienced | Qualified to be Charge Nurse. Can precept Level 1 staff. Can take the sickest patients. Can manage the unit. |
+| **4** | Proficient (Trauma Ready) | Experienced, can handle critical situations | TNCC certified. Can handle Codes/Trauma alone until backup arrives. **Stand-in Charge Nurse** when no Level 5 is available. |
+| **5** | Expert (Charge/Preceptor) | Most experienced | **Primary Charge Nurse** (preferred). Can precept Level 1 staff. Can take the sickest patients. Can manage the unit. |
 
 ### 1.4 Other Staff Attributes
 | Attribute | Description |
@@ -97,7 +97,11 @@ Hard rules are constraints that **cannot be broken**. The scheduler will not cre
 - **Applies to:** All shifts where `countsTowardStaffing = true`
 
 ### 3.2 Charge Nurse Required
-- **Rule:** If a shift requires a charge nurse, at least one assigned staff member must be charge-nurse qualified
+- **Rule:** If a shift requires a charge nurse, at least one assigned staff member must be marked as charge nurse for that shift, must have `isChargeNurseQualified = true`, and must have `icuCompetencyLevel ≥ 4`
+- **Competency requirement:**
+  - **Level 5** is the preferred (primary) charge nurse
+  - **Level 4** may serve as stand-in charge nurse only when no Level 5 is available on the same shift
+  - **Levels 1–3** can never be assigned as charge, even if `isChargeNurseQualified` is set in the database (the flag alone is not sufficient)
 - **Applies to:** Shifts marked as `requiresChargeNurse = true`
 
 ### 3.3 Patient-to-Licensed-Staff Ratio
@@ -150,7 +154,7 @@ Hard rules are constraints that **cannot be broken**. The scheduler will not cre
 
 ### 3.13 Maximum 60 Hours in 7 Days *(NEW)*
 - **Rule:** Staff cannot work more than **60 hours** in any rolling 7-day period
-- **Calculation:** Looks at any 7 consecutive days, not just Monday-Sunday
+- **Calculation:** The system checks **all 7 rolling windows that contain the candidate shift date** — not just the backward-looking window — to correctly account for shifts already assigned on future dates. This is important because the scheduler processes the most-constrained shifts first, which may place future-dated assignments before earlier-dated ones are processed.
 - **Purpose:** Safety limit to prevent extreme fatigue
 
 ---
@@ -506,6 +510,7 @@ Please review each section and note any changes needed:
 | 1.2.2 | Feb 16, 2026 | **Census & Preferences visibility:** (1) Census input added to shift assignment dialog - determines required staffing via census bands; (2) Staff count display fixed to show scheduled/required based on census; (3) Staff detail dialog now shows shift preferences; (4) Census Bands added to Excel import/export |
 | 1.2.3 | Feb 18, 2026 | **Staff preferences in Excel:** Staff preferences can now be imported/exported via Excel. New columns in Staff sheet: Preferred Shift, Preferred Days Off, Max Consecutive Days, Max Hours Per Week, Avoid Weekends |
 | 1.3.0 | Feb 20, 2026 | **Section 12 added:** Scheduling Algorithm — describes greedy construction, local search, three weight profiles, hard rule eligibility, soft penalty scoring, understaffing handling, and audit behavior for automated schedule generation |
+| 1.4.0 | Feb 20, 2026 | **Charge nurse competency (§1.3, §3.2):** Level 4+ is now a hard requirement for charge nurse assignment. Level 5 is the preferred primary charge; Level 4 is stand-in only. `isChargeNurseQualified` flag alone is insufficient for levels 1–3. **60h rolling window (§3.13):** System now checks all 7 windows containing the shift date, not just the backward-looking window, to catch violations caused by future shifts assigned earlier in the greedy pass. |
 
 ---
 

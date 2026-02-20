@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.1] - 2026-02-20
+
+### Fixed
+
+- **Charge nurse competency enforced as a hard rule.** Only Level 4+ nurses may be assigned as charge. Level 5 is the preferred primary charge nurse; Level 4 is the stand-in fallback only when no Level 5 is available. Level 1–3 nurses cannot be charge regardless of the `isChargeNurseQualified` database flag. The fix was applied in both the scheduling engine (greedy pass) and the rule evaluator, so bad import data cannot slip through either path. Tests added for both layers.
+
+- **60-hour rolling window check is now comprehensive.** The scheduler processes ICU shifts first (most-constrained-first ordering). This means future-dated ICU assignments are placed in state before earlier Med-Surg dates are processed. The previous backward-only window check `[date-6 … date]` saw no existing assignments for those earlier dates and allowed them through — but the forward windows `[date … date+6]` were already over the 60h limit. The fix checks all 7 windows that contain the candidate shift date, catching any combination of past and future assignments that would breach the limit.
+
+- **Violations display separated into hard and soft.** The schedule grid now shows a red "N hard" badge and a yellow "N soft" badge independently per shift. Previously, soft violations were displayed with the same styling as hard violations, making it hard to distinguish severity.
+
+### Changed
+
+- **Per-staff soft violation breakdown added.** The soft violations summary card on the schedule page now includes an "Affected staff" section listing every nurse with at least one soft violation, sorted by violation count (highest first), with the rule names that fired for them. This replaces the previous rule-level-only view, which gave no indication of which individuals were most affected.
+
+---
+
 ## [1.4.0] - 2026-02-20
 
 ### Summary
