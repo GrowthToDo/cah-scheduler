@@ -183,17 +183,26 @@ export function buildContext(scheduleId: string): RuleContext {
     patientToNurseRatio: b.patientToNurseRatio,
   }));
 
-  // Fetch PRN availability for this schedule
+  // Fetch PRN availability — load all submissions across all schedules, then
+  // aggregate dates per staff. The eligibility check already gates by date, so
+  // loading across scheduleIds is safe and means PRN staff with standing
+  // availability don't lose it just because a new schedule was created.
   const prnAvailabilityRecords = db
     .select()
     .from(prnAvailability)
-    .where(eq(prnAvailability.scheduleId, scheduleId))
     .all();
 
-  const prnAvailabilityInfos: PRNAvailabilityInfo[] = prnAvailabilityRecords.map((p) => ({
-    staffId: p.staffId,
-    availableDates: (p.availableDates as string[]) ?? [],
-  }));
+  const prnDatesByStaff = new Map<string, Set<string>>();
+  for (const p of prnAvailabilityRecords) {
+    const dates = prnDatesByStaff.get(p.staffId) ?? new Set<string>();
+    for (const d of ((p.availableDates as string[]) ?? [])) {
+      dates.add(d);
+    }
+    prnDatesByStaff.set(p.staffId, dates);
+  }
+  const prnAvailabilityInfos: PRNAvailabilityInfo[] = [...prnDatesByStaff.entries()].map(
+    ([staffId, dates]) => ({ staffId, availableDates: [...dates] })
+  );
 
   // Fetch approved staff leaves that overlap with schedule dates
   const staffLeaveRecords = db

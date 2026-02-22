@@ -16,6 +16,8 @@ export interface WeightProfile {
   skillMix: number;
   float: number;
   chargeClustering: number;
+  /** Flat penalty for using agency nurses (markup cost 2–3× base pay vs OT at 1.5×). */
+  agency: number;
 }
 
 export interface AssignmentDraft {

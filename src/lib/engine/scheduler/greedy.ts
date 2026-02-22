@@ -7,13 +7,25 @@ import { softPenalty } from "./scoring";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getShiftPriority(shift: ShiftInfo): number {
-  // Most constrained shifts first: ICU/ER with charge nurse > ICU/ER > night > day > on_call
+  // Most constrained first:
+  //   1. Weekend ICU/ER charge  — these come at the END of the week in date order, so charge
+  //      nurses accumulate too many hours Mon–Fri before the slot is reached.  Processing them
+  //      FIRST guarantees they get first pick of the charge-qualified pool.
+  //   2. Weekday ICU/ER charge
+  //   3. ICU/ER (non-charge)
+  //   4. Night
+  //   5. Day / Evening
+  //   6. On-call
   const icu = isICUUnit(shift.unit);
-  if (icu && shift.requiresChargeNurse) return 1;
-  if (icu) return 2;
-  if (shift.shiftType === "night") return 3;
-  if (shift.shiftType === "day" || shift.shiftType === "evening") return 4;
-  return 5; // on_call
+  if (icu && shift.requiresChargeNurse) {
+    const dayOfWeek = new Date(shift.date).getDay(); // 0 = Sunday, 6 = Saturday
+    if (dayOfWeek === 0 || dayOfWeek === 6) return 1; // weekend ICU charge
+    return 2; // weekday ICU charge
+  }
+  if (icu) return 3;
+  if (shift.shiftType === "night") return 4;
+  if (shift.shiftType === "day" || shift.shiftType === "evening") return 5;
+  return 6; // on_call
 }
 
 function sortShiftsByDifficulty(shifts: ShiftInfo[]): ShiftInfo[] {
@@ -111,6 +123,12 @@ export function greedyConstruct(
   const activeStaff = context.staffList.filter((s) => s.isActive);
   const sortedShifts = sortShiftsByDifficulty(context.shifts);
 
+  // Pre-compute all ICU/ER charge shifts so the charge protection look-ahead
+  // can reference upcoming slots without re-scanning on every iteration.
+  const icuChargeShifts = sortedShifts.filter(
+    (s) => isICUUnit(s.unit) && s.requiresChargeNurse
+  );
+
   for (const shift of sortedShifts) {
     const required = shift.requiredStaffCount + shift.acuityExtraStaff;
     const slotReasons: string[] = [];
@@ -199,9 +217,85 @@ export function greedyConstruct(
       const currentSlotAssignments = state.getShiftAssignments(shift.id);
       const assignedIds = new Set(currentSlotAssignments.map((a) => a.staffId));
 
-      const eligible = activeStaff.filter(
-        (s) => !assignedIds.has(s.id) && passesHardRules(s, shift, state, context)
+      // Charge protection look-ahead: before allowing a Level 4+ charge-qualified
+      // nurse into a regular (non-charge) slot, check whether doing so would exhaust
+      // their 60h rolling-window capacity for an upcoming ICU/ER charge shift where
+      // they are the last available charge nurse.  Only blocks when the nurse is
+      // genuinely the final option — avoids over-constraining the candidate pool.
+      const protectedChargeNurseIds = new Set<string>();
+      const lookAheadCutoff = new Date(shift.date);
+      lookAheadCutoff.setDate(lookAheadCutoff.getDate() + 7);
+      const lookAheadCutoffStr = lookAheadCutoff.toISOString().slice(0, 10);
+
+      for (const upcoming of icuChargeShifts) {
+        // Only look ahead: shifts after the current one, within 7 days, not yet charged
+        if (upcoming.date <= shift.date || upcoming.date > lookAheadCutoffStr) continue;
+        if (state.getShiftAssignments(upcoming.id).some((a) => a.isChargeNurse)) continue;
+
+        // Identify Level 4+ nurses who would still be eligible for the upcoming
+        // charge shift WITHOUT today's proposed assignment consuming their hours.
+        const eligibleForUpcoming = activeStaff.filter(
+          (s) =>
+            s.isChargeNurseQualified &&
+            s.icuCompetencyLevel >= 4 &&
+            !assignedIds.has(s.id) &&
+            passesHardRules(s, upcoming, state, context)
+        );
+
+        // For each candidate that would become ineligible for `upcoming` after
+        // being assigned to the current shift, count remaining alternatives.
+        for (const candidate of eligibleForUpcoming) {
+          const wouldBeBlocked = state.wouldExceed7DayHoursAfterAdding(
+            candidate.id,
+            shift.date,
+            shift.durationHours,
+            upcoming.date,
+            upcoming.durationHours,
+            60
+          );
+          if (!wouldBeBlocked) continue;
+
+          // This candidate would be knocked out by today's assignment.
+          // Count how many other Level 4+ nurses remain eligible for `upcoming`.
+          const otherCount = eligibleForUpcoming.filter(
+            (other) =>
+              other.id !== candidate.id &&
+              !state.wouldExceed7DayHoursAfterAdding(
+                other.id,
+                shift.date,
+                shift.durationHours,
+                upcoming.date,
+                upcoming.durationHours,
+                60
+              )
+          ).length;
+
+          if (otherCount === 0) {
+            // candidate is the sole remaining charge nurse for `upcoming` —
+            // protect them from being consumed by the current regular slot.
+            protectedChargeNurseIds.add(candidate.id);
+          }
+        }
+      }
+
+      const allEligible = activeStaff.filter(
+        (s) =>
+          !assignedIds.has(s.id) &&
+          !protectedChargeNurseIds.has(s.id) &&
+          passesHardRules(s, shift, state, context)
       );
+
+      // Non-OT preference: any nurse who can cover this shift without crossing
+      // the 40h overtime threshold is used before nurses who would go into OT,
+      // regardless of employment type or current FTE utilisation.  This ensures
+      // part-time staff working above their FTE target (extra hours, but no 1.5×
+      // payroll cost) are always preferred over scheduling a full-time nurse into
+      // actual overtime.  If every eligible candidate would cause OT, fall back
+      // to the full eligible pool so the slot is filled rather than left empty.
+      const nonOTEligible = allEligible.filter(
+        (s) => state.getWeeklyHours(s.id, shift.date) + shift.durationHours <= 40
+      );
+      const eligible = nonOTEligible.length > 0 ? nonOTEligible : allEligible;
 
       if (eligible.length === 0) {
         // Collect why the top-5 staff were rejected (for reporting)

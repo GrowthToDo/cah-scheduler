@@ -177,6 +177,47 @@ export class SchedulerState {
   }
 
   /**
+   * Charge-protection look-ahead helper.
+   *
+   * Returns true if adding a shift of `newDuration` on `newDate` to this
+   * nurse's assignments would cause them to fail the 60h eligibility check for
+   * a future shift of `futureDuration` on `futureDate`.
+   *
+   * Used in greedy.ts to detect when a charge-qualified nurse would be
+   * "used up" by a regular slot before a critical ICU/ER charge shift.
+   */
+  wouldExceed7DayHoursAfterAdding(
+    staffId: string,
+    newDate: string,
+    newDuration: number,
+    futureDate: string,
+    futureDuration: number,
+    limit: number
+  ): boolean {
+    const futureDateObj = new Date(futureDate);
+    const assignments = this.assignmentsByStaff.get(staffId) ?? [];
+
+    for (let offset = 0; offset <= 6; offset++) {
+      const windowStart = new Date(futureDateObj);
+      windowStart.setDate(windowStart.getDate() - offset);
+      const windowEnd = new Date(windowStart);
+      windowEnd.setDate(windowEnd.getDate() + 6);
+      const startStr = windowStart.toISOString().slice(0, 10);
+      const endStr = windowEnd.toISOString().slice(0, 10);
+
+      const existing = assignments
+        .filter((a) => a.date >= startStr && a.date <= endStr)
+        .reduce((sum, a) => sum + a.durationHours, 0);
+
+      // Count the current (proposed) assignment if it falls inside this window
+      const currentExtra = newDate >= startStr && newDate <= endStr ? newDuration : 0;
+
+      if (existing + currentExtra + futureDuration > limit) return true;
+    }
+    return false;
+  }
+
+  /**
    * Returns the peak hours in any rolling 7-day window containing `date`.
    * Used to build human-readable rejection messages.
    */

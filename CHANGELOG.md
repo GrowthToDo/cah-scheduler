@@ -6,6 +6,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.9] - 2026-02-22
+
+### Fixed
+
+- **Part-time nurses working extra hours are now always scheduled before full-time nurses go into overtime.** Previously, the scheduler relied purely on penalty weights to express this preference — an OT penalty of 1.5× could still be outweighed by competing soft penalties (float differential, skill mix, preference mismatch), causing the scheduler to pick a full-time nurse into actual overtime when a part-time nurse was available and eligible. The rule is now enforced as a hard separation in Pass 2 of greedy construction: all eligible candidates are split into a non-OT pool (weekly hours + this shift ≤ 40h) and an OT pool. The non-OT pool is used exclusively when it is non-empty; the full pool is only used as a fallback if every eligible candidate would cause overtime. This guarantees that a 0.5 FTE nurse working above their 20h/week target (extra hours, but no payroll OT cost) is always preferred over a full-time nurse who would cross 40h, regardless of float or preference penalties.
+
+- **Extra-hours violations now appear on every shift above the FTE target, not just the first.** Previously, once a part-time nurse was flagged for going above their standard hours (e.g., 20h/week for a 0.5 FTE nurse), every subsequent shift in the same week showed nothing — even though each additional shift compounded the over-scheduling. The rule now flags every shift in the "above FTE, below 40h" zone. The penalty for each such shift uses only the **marginal** extra hours that shift contributes: if the nurse is already above FTE when this shift starts, the full shift duration is counted as extra; if this is the threshold-crossing shift, only the portion above the FTE target is counted. Actual OT (>40h) continues to be flagged once, on the shift that first crosses 40h.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/greedy.ts` — Pass 2 eligible pool split into `allEligible` / `nonOTEligible`; non-OT candidates used first with OT fallback
+- `src/lib/engine/rules/overtime-v2.ts` — removed `extraHoursFlagged` gate; added `prevCumulative` tracking; marginal extra-hours calculation per shift
+
+---
+
+## [1.4.8] - 2026-02-22
+
+### Fixed
+
+- **Hard violations are now automatically repaired after greedy construction.** Previously, if the greedy phase produced a schedule with a charge nurse violation or an understaffed ICU shift, the system left it unresolved and surfaced it to the manager for manual correction. The manager had to open the assignment dialog, find an eligible nurse, and assign them — a manual step that should not have been necessary when eligible staff existed somewhere in the schedule.
+
+  A new **repair phase** runs after greedy construction and before local search. It scans the constructed schedule for hard violations (missing charge nurse, missing Level 4+ ICU supervisor, minimum staffing shortfall) and attempts to fix each one using two strategies:
+
+  **Strategy A — Direct assignment:** If any eligible staff member is not yet on the violated shift, they are assigned immediately. This handles cases where the greedy's charge-protection look-ahead was overly conservative and held back a nurse who was actually available.
+
+  **Strategy B — Swap repair:** If no direct assignment is possible, the repair phase searches for a Level 4+ nurse currently assigned to a *lower-criticality* shift and moves them to the critical slot. The key mechanism: removing the nurse from their current assignment changes which rolling 7-day windows contain their hours, potentially bringing them under the 60-hour cap for the critical shift. The vacated slot on the donor shift is then back-filled with any eligible (typically less specialised) nurse so the donor shift does not stay short-staffed.
+
+  Repair runs up to three passes so cascading fixes take effect — for example, adding a Level 4+ supervisor to an ICU shift makes Level 2 nurses newly eligible, which the next pass can then use to fill the remaining shortfall.
+
+  A hard violation is preserved in the output (and shown to the manager) only when no eligible candidate exists anywhere in the staff roster — a genuine staffing shortage that no algorithm can resolve without adding more staff.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/repair.ts` — new file; `repairHardViolations(result, context)` function
+- `src/lib/engine/scheduler/index.ts` — repair phase inserted between greedy construction and local search
+
+---
+
+## [1.4.7] - 2026-02-22
+
+### Fixed
+
+- **Weekend ICU charge shifts no longer fail in the Fairness-Optimized schedule.** The root cause was algorithmic, not a shortage of charge nurses: the greedy algorithm sorted all ICU charge shifts by date, so Saturday and Sunday slots were always processed *last*. In the FAIR profile, the low overtime weight (0.5) allows charge-qualified nurses to accumulate hours freely Monday–Friday. By the time Saturday or Sunday charge slots were reached, those nurses had often hit the 60-hour rolling-window limit and were ineligible. Adding a new agency charge nurse (Paul Walker) did not fix this — he would also be used up during weekday charge slots before Sunday arrived.
+
+  The fix changes the shift priority order so **weekend ICU charge shifts (Saturday and Sunday) are processed before weekday ICU charge shifts**. Sat/Sun charge slots now get first pick of the Level 4+ pool before any weekday shift has consumed capacity. This is consistent with the "most constrained first" principle: weekend slots are harder to fill because the charge pool is depleted by Friday in the FAIR profile.
+
+  The change applies to all three schedule variants. Balanced and Cost-Optimized are unaffected in practice — their higher overtime penalties already prevent charge pool depletion before weekends.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/greedy.ts` — `getShiftPriority()` split into weekend ICU charge (priority 1) and weekday ICU charge (priority 2); all other priorities shifted down by one
+
+---
+
+## [1.4.6] - 2026-02-22
+
+### Added
+
+- **Agency nurses are now treated as last resort by the auto-scheduler.** Previously, agency staff competed on equal footing with regular employees. Because their FTE is 0 (no weekly hours target), they incurred no overtime penalty and sometimes benefited from the capacity-spreading bonus — the scheduler would pick them *before* regular staff. A new `agency` weight component in the soft penalty function adds a flat penalty whenever an agency candidate is evaluated, pushing agency to the back of the queue behind full-time, part-time, float pool, and PRN staff. Agency still fills slots that no other candidate can cover — hard rules are never relaxed — but it is no longer chosen ahead of less-expensive staff when alternatives exist. Penalty weights by profile: Balanced 2.5, Fairness-Optimized 1.5 (lighter — accepts agency cost for equitable distribution), Cost-Optimized 5.0 (heaviest — agency markup 2–3× base pay far exceeds any other cost consideration).
+
+- **PRN Available Days column in the Excel import template.** Per_diem (PRN) staff no longer need to manually submit availability through the app before they can appear in auto-generated schedules. Importing the Excel template now includes a "PRN Available Days" column in the Staff sheet. Accepted values: comma-separated day abbreviations (`Mon, Wed, Fri`), keyword patterns (`Weekdays`, `Weekends`, `All`), or any mix of abbreviated/full day names. During import, the system expands the day pattern into specific dates for the next 12 months and creates `prn_availability` records automatically. The scheduling engine then has standing availability to work with on the first run, without requiring a separate submission step. The export (GET) also writes the "PRN Available Days" column, expressing the staff member's availability as a compact pattern (e.g. `Mon, Wed, Fri`) so the Excel round-trip is lossless.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/types.ts` — `agency: number` field added to `WeightProfile` interface
+- `src/lib/engine/scheduler/scoring.ts` — agency penalty section (§8) after charge clustering
+- `src/lib/engine/scheduler/weight-profiles.ts` — `agency` weight added to all three profiles (BALANCED: 2.5, FAIR: 1.5, COST_OPTIMIZED: 5.0)
+- `src/lib/import/parse-excel.ts` — `prnAvailableDays` field in `StaffImport`; `parsePRNAvailableDays()` helper; "PRN Available Days" column parsed in `parseStaffSheet()`; template updated with new column header and per_diem example row
+- `src/app/api/import/route.ts` — `expandPRNDatesToNextYear()` helper; `importData()` creates PRN template schedule + `prn_availability` records for per_diem staff; `exportCurrentData()` exports PRN Available Days column using `summarisePRNDates()`
+
+---
+
+## [1.4.5] - 2026-02-22
+
+### Fixed
+
+- **Charge protection look-ahead prevents Sunday ICU hard violations in FAIR schedule.** The FAIR profile's low overtime weight (0.5) allowed charge-qualified Level 4+ nurses to accumulate hours freely through Monday–Saturday, leaving them ineligible (60h rolling window) for Sunday ICU night charge shifts. A look-ahead guard added to the greedy Pass 2 now detects when assigning a Level 4+ nurse to a regular slot would exhaust their 60h capacity for an upcoming ICU charge shift within 7 days — but only blocks the assignment when that nurse is the sole remaining eligible charge candidate. If other charge-qualified nurses are still available for the upcoming shift, the guard does not activate, preserving full candidate selection for regular slots.
+
+- **PRN staff now usable in auto-generated schedules.** The PRN availability lookup was filtered by `scheduleId`, which meant PRN staff with availability submitted for a previous schedule period were invisible to a newly created schedule. The lookup now aggregates all availability dates across all submissions per staff member; the eligibility check is already date-gated, so this change does not schedule PRN staff on dates they did not submit. The practical effect is that standing PRN availability (e.g., "always available Tue/Thu/Sat") is honoured by any new schedule covering those dates, without requiring re-submission every period.
+
+- **Cost-Optimized float penalty reduced from 3.0 to 2.0.** Float differentials (flat hourly add-on, typically \$3–5/hr) are a real but smaller cost than overtime (1.5× base pay). Setting the float penalty equal to the overtime penalty (both at 3.0) overstated the cost of cross-unit assignments. The corrected weight (2.0) still strongly discourages unnecessary floating of regular-unit nurses while accurately reflecting that it is less expensive than overtime.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/greedy.ts` — charge protection look-ahead in Pass 2; pre-computed `icuChargeShifts` array
+- `src/lib/engine/scheduler/state.ts` — `wouldExceed7DayHoursAfterAdding()` helper for look-ahead
+- `src/lib/engine/rule-engine.ts` — PRN availability loaded across all schedules, aggregated per staff
+- `src/lib/engine/scheduler/weight-profiles.ts` — Cost-Optimized float weight 3.0 → 2.0
+
+---
+
 ## [1.4.4] - 2026-02-22
 
 ### Fixed

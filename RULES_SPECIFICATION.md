@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.4.4
-**Last Updated:** February 22, 2026
+**Document Version:** 1.4.9
+**Last Updated:** February 22, 2026 (v1.4.9)
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -525,6 +525,9 @@ Please review each section and note any changes needed:
 | 1.4.2 | Feb 20, 2026 | **Overtime rule (§4.1):** Violations now attach to the specific shift that crosses the threshold, not staff-level. Agency/on-demand staff with FTE = 0 are exempt. **Weekend rule (§4.2):** Logic flipped from flagging shortfall to flagging excess assignments beyond the required count; each excess assignment is flagged with a shift-specific violation. Both changes make the violations panel actionable — each flagged shift shows exactly which assignment to review. |
 | 1.4.3 | Feb 22, 2026 | **Balanced OT weight (§12.5):** Raised from 1.0 to 1.5 so actual overtime is consistently more expensive than any single preference violation, matching the real 1.5× payroll cost. **Capacity-spreading bonus (§12.4):** Small incentive added to prefer less-loaded staff as a tiebreaker, reducing overtime accumulation on regular staff and preserving float pool capacity. |
 | 1.4.4 | Feb 22, 2026 | **Assignment dialog charge validation (§3.2):** `needsCharge` condition now requires Level 4+ (not just any `isChargeNurse` flag). "Assign as Charge" button is gated to Level 4+ nurses. Assigning a new charge nurse demotes any previous charge on the same shift so the hard violation resolves immediately. |
+| 1.4.5 | Feb 22, 2026 | **Charge protection guard (§12.2):** Look-ahead added to greedy Pass 2 — Level 4+ nurses are protected from regular slots when they are the sole remaining charge candidate for an upcoming ICU/ER shift within 7 days. Eliminates Sunday hard violations in the FAIR schedule caused by the low overtime weight exhausting charge nurses. **PRN availability (§3.10):** Lookup broadened to aggregate across all schedule submissions; standing availability is honoured by any new schedule covering the same dates. **Cost-Optimized float weight (§12.5):** Corrected 3.0 → 2.0 to reflect that float differentials cost less than overtime. |
+| 1.4.6 | Feb 22, 2026 | **Agency penalty added (§12.4, §12.5):** New `agency` weight component applies a flat penalty whenever an agency nurse is considered for a slot. Ensures the scheduler exhausts regular, float, and PRN pools before drawing on agency (markup 2–3× base pay). Weights: Balanced 2.5, Fairness-Optimized 1.5, Cost-Optimized 5.0. **PRN Available Days column in Excel (§3.10):** Import template and export now include a "PRN Available Days" column for per_diem staff. Accepted formats: comma-separated day abbreviations (e.g. "Mon, Wed, Fri"), "Weekdays", "Weekends", or "All". Importing this column auto-creates `prn_availability` records spanning the next 12 months — PRN staff are immediately usable in auto-generated schedules without a manual availability submission step. |
+| 1.4.7 | Feb 22, 2026 | **Weekend ICU charge shifts prioritised first in greedy (§12.2):** Weekend charge slots (Sat/Sun) were previously sorted after all weekday charge slots (earliest date first within priority 1). In the FAIR profile — where the low overtime weight allows charge nurses to accumulate hours freely Mon–Fri — this meant weekend slots arrived last with the charge pool already near its 60h rolling limit. Splitting priority 1 into weekend-ICU-charge (new priority 1) and weekday-ICU-charge (priority 2) ensures Sat/Sun charge shifts get first pick of Level 4+ nurses before any weekday shift has consumed their capacity. Applies to all three schedule variants; Balanced and Cost-Optimized are unaffected in practice because their higher overtime penalties already prevent charge-pool depletion. |
 | 1.4.3 | Feb 22, 2026 | **Scheduler penalty re-calibration (§12.4, §12.5):** (1) Balanced variant `overtime` weight raised from 1.0 → 1.5, making actual OT (a real 1.5× payroll cost) consistently more expensive than any single preference violation. (2) Capacity-spreading bonus added to the scoring function: a small incentive (−`overtime_weight × 0.1 × remaining_hours/40`) prefers staff with more remaining hours before the 40h threshold. Acts as a tiebreaker that naturally spreads assignments across the week, reduces temporal depletion of float pool capacity, and decreases unnecessary overtime on regular unit staff. |
 
 ---
@@ -549,25 +552,52 @@ Each variant is generated **fully independently** using the same two-phase algor
 
 ---
 
-### 12.2 Algorithm — Two Phases
+### 12.2 Algorithm — Three Phases
 
 #### Phase 1: Greedy Construction
 
 Shifts are sorted by **constraint difficulty** (most constrained first, to maximise the chance of filling hard-to-fill slots before the candidate pool is depleted):
 
-1. ICU/ER shifts that also require a charge nurse
-2. All other ICU/ER shifts
-3. Night shifts
-4. Day and evening shifts
-5. On-call shifts (most flexible candidate pool, filled last)
+1. **Weekend ICU/ER charge shifts** (Saturday or Sunday) — most constrained. In a weekly cycle, weekend charge slots fall at the end of date-ordered processing, so charge-qualified nurses accumulate hours Mon–Fri before the slot is reached. Processing them first guarantees they get first pick of the Level 4+ charge pool.
+2. Weekday ICU/ER shifts that require a charge nurse
+3. All other ICU/ER shifts
+4. Night shifts
+5. Day and evening shifts
+6. On-call shifts (most flexible candidate pool, filled last)
 
 Within each group, earlier dates come first, then earlier start times.
 
 For each shift:
 1. If a **charge nurse slot** is required and not yet filled, a charge-qualified candidate is selected first.
 2. Remaining **staff slots** are filled one at a time.
-3. For each slot: filter all active staff through the **hard rule eligibility checks** (see §12.3), score the eligible candidates with the **soft penalty function** (see §12.4), and assign the **lowest-penalty candidate**.
+3. For each slot: filter all active staff through the **hard rule eligibility checks** (see §12.3) and the **charge protection guard** (see below). The eligible pool is then split into **non-OT candidates** (weekly hours + this shift ≤ 40h) and **OT candidates** (would cross 40h). Non-OT candidates are used exclusively when any exist; OT candidates are only considered when every eligible nurse would cause overtime. Within whichever pool is used, candidates are ranked by the **soft penalty function** (see §12.4) and the lowest-penalty candidate is assigned.
 4. If no eligible candidate exists for a slot, the slot is left empty. The shift is recorded as **understaffed** with the most common hard rule rejection reasons.
+
+**Charge protection guard (Pass 2):** Before including a Level 4+ charge-qualified nurse as a candidate for a regular (non-charge) slot, the algorithm checks whether assigning them now would exhaust their 60-hour rolling-window capacity for any upcoming ICU/ER charge shift within the next 7 days. The nurse is excluded from the current slot only if: (a) they would be rendered ineligible for the upcoming charge shift by this assignment, **and** (b) no other Level 4+ nurse is still eligible for that upcoming charge shift. This prevents the FAIR profile's low overtime weight from over-consuming charge nurses on regular slots, leaving Sunday ICU charge shifts with no valid candidate.
+
+#### Phase 1.5: Hard Violation Repair
+
+After greedy construction, the schedule is scanned for remaining hard violations:
+
+- **Missing charge nurse** — shift requires a charge nurse but none was assigned
+- **Missing Level 4+ ICU supervisor** — ICU/ER shift has staff but no Level 4+ nurse
+- **Understaffed slots** — fewer staff assigned than the minimum required
+
+Shifts are repaired in criticality order (ICU charge first, then non-ICU charge, then ICU general, then others). For each violation, two strategies are tried:
+
+1. **Direct assignment** — find any eligible staff member not yet on the violated shift and assign them. This succeeds when the greedy's charge-protection guard held back a nurse who is actually available.
+
+2. **Swap repair** — move a Level 4+ nurse from a *lower-criticality* shift to the critical slot. The mechanism: removing the nurse from their current assignment changes which rolling 7-day windows contain their hours, potentially dropping their total below the 60-hour cap for the critical shift. The vacated slot is then back-filled with any eligible generalist nurse so the donor shift does not stay short-staffed.
+
+A donor shift is only raided when:
+- Its criticality is strictly lower than the violated shift (e.g., a regular day shift can donate to an ICU charge shift)
+- It retains at least one staff member after the raid
+- Its own charge nurse is not removed (unless another charge nurse remains)
+- An ICU donor shift with Level 2 nurses is not left without Level 4+ supervision
+
+Up to three repair passes are run so cascading fixes take effect (e.g., adding Level 4+ makes Level 2 staff newly eligible, filling the next pass's shortfall).
+
+A violation is preserved in the output **only when no eligible candidate exists anywhere** in the staff roster — a genuine shortage that requires management intervention (contacting agency, finding additional staff).
 
 #### Phase 2: Local Search (Swap Improvement)
 
@@ -620,6 +650,7 @@ Each component is multiplied by the weight for that component in the active vari
 | **Preceptor incentive** | − `weight × 0.8` | Candidate is Level 5 and a Level 1 is already on the shift |
 | **Level 2 supervision** | − `weight × 0.6` | Candidate is Level 4+ on an ICU/ER shift that has a Level 2 nurse |
 | **Charge clustering** | + `weight × 0.5` | Non-charge-candidate is charge-qualified, but shift already has a charge nurse |
+| **Agency** | + `weight × 1.0` | Candidate is an agency nurse (employment type = `agency`) |
 
 **Capacity bonus rationale:** Mirrors natural charge-nurse behaviour — when two candidates are otherwise equal, the one with more remaining hours this week is asked first. The coefficient (0.1) is intentionally small so it acts as a tiebreaker only and does not override meaningful clinical penalties (skill mix, charge requirement, preferences). Float pool staff — who have no home-unit bias and often have lower accumulated hours when critical ICU shifts are scheduled first — benefit most from this bonus, naturally reducing overtime on regular unit staff later in the schedule.
 
@@ -637,20 +668,29 @@ Three profiles are defined. Weights are multiplied by the per-component penalty 
 | `consecutiveWeekends` | 1.0 | **3.0** | 1.0 |
 | `holidayFairness` | 1.0 | **3.0** | 1.0 |
 | `skillMix` | 1.0 | 1.0 | 0.5 |
-| `float` | 1.0 | 0.5 | **3.0** |
+| `float` | 1.0 | 0.5 | **2.0** |
 | `chargeClustering` | 1.0 | 1.0 | 0.5 |
+| `agency` | **2.5** | 1.5 | **5.0** |
 
 **Balanced overtime rationale:** Raised from 1.0 → 1.5 so that actual overtime (a real payroll cost at 1.5× pay) is consistently more expensive than any single preference violation. At 1.5, 8h OT costs 1.0 scheduler units vs. a shift-type mismatch at 0.75 — overtime takes priority. The Fairness-Optimized profile intentionally keeps overtime low (0.5) because it accepts some extra hours in exchange for a more equitable weekend/holiday distribution.
+
+**Cost-Optimized float rationale:** Lowered from 3.0 → 2.0. Float differentials are a flat hourly add-on (typically \$3–5/hr), not a multiplier, so they cost less than overtime (1.5× base pay). Setting float equal to overtime (both 3.0) overstated the cost of cross-unit assignments. The corrected weight (2.0) still strongly discourages unnecessary floating of regular-unit nurses while remaining below the overtime penalty.
+
+**Agency weight rationale:** Agency nurses carry a 2–3× markup over base pay (agency fee + premium rate), making them significantly more expensive than even overtime (1.5× base) or float differentials. The `agency` penalty is a flat addition applied to every agency nurse in the candidate pool, ensuring the scheduler exhausts regular employees, float pool, and PRN staff before drawing on agency coverage. Cost-Optimized uses the highest agency penalty (5.0) to aggressively reserve agency as a true last resort. Fairness-Optimized uses a lower penalty (1.5) so equitable distribution across all staff takes precedence over cost avoidance. Agency staff retain all hard rule constraints — they are not scheduled in violation of rest, competency, or leave rules just because they are last resort.
 
 ---
 
 ### 12.6 Understaffing
 
-When a shift cannot be fully staffed (all candidates fail hard rules for a slot):
+When the greedy phase cannot fill a slot, the repair phase (§12.2 Phase 1.5) immediately attempts to fix it by swapping specialised staff from lower-priority shifts. A shift only remains understaffed after generation when **both** the greedy phase and the repair phase have exhausted all possibilities.
+
+For shifts that still cannot be filled after repair:
 - The slot is left **empty** — hard rules are never relaxed
-- The shift is recorded with: date, shift type, unit, slots required, slots filled, and most common rejection reasons
+- The shift is recorded with: date, shift type, unit, slots required, slots filled, and rejection reason
 - After generation, warnings are shown to the manager
-- The manager must resolve understaffed shifts manually (assign staff individually, contact an agency, etc.)
+- The manager must resolve these manually (assign staff individually, contact an agency, etc.)
+
+Understaffed shifts reported after generation represent **genuine staffing shortages** — the roster does not have enough eligible staff to cover them, regardless of how the schedule is arranged.
 
 ---
 

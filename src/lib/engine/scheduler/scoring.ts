@@ -133,5 +133,13 @@ export function softPenalty(
     }
   }
 
+  // ── 8. Agency penalty ───────────────────────────────────────────────────────
+  // Agency nurses cost 2–3× the base hourly rate (agency markup + premium pay).
+  // Apply a flat penalty so the scheduler treats them as last resort — used only
+  // when the regular, float, and PRN pools cannot fill the slot.
+  if (staffInfo.employmentType === "agency") {
+    penalty += weights.agency * 1.0;
+  }
+
   return penalty;
 }

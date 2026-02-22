@@ -4,6 +4,37 @@ import { NextResponse } from "next/server";
 import { parseExcelFile, generateTemplate, type ImportResult } from "@/lib/import/parse-excel";
 import * as XLSX from "xlsx";
 
+// Fixed schedule ID used as FK anchor for PRN availability imported from Excel.
+// The rule engine loads PRN availability across ALL schedules (no scheduleId filter),
+// so this ID is only needed to satisfy the FK constraint — it has no scheduling impact.
+const PRN_TEMPLATE_SCHEDULE_ID = "00000000-0000-0000-0000-000000000001";
+
+const DAY_NAME_TO_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+  Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+/**
+ * Expands an array of full day names (e.g. ["Monday", "Wednesday", "Friday"])
+ * into a list of specific YYYY-MM-DD date strings for the next 12 months.
+ */
+function expandPRNDatesToNextYear(dayNames: string[]): string[] {
+  if (dayNames.length === 0) return [];
+  const allowedDays = new Set(dayNames.map((d) => DAY_NAME_TO_INDEX[d]).filter((i) => i !== undefined));
+  const dates: string[] = [];
+  const today = new Date();
+  const end = new Date(today);
+  end.setFullYear(end.getFullYear() + 1);
+  const cur = new Date(today);
+  while (cur <= end) {
+    if (allowedDays.has(cur.getDay())) {
+      dates.push(cur.toISOString().slice(0, 10));
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
 // DELETE all existing data in correct order for FK constraints
 function deleteAllData() {
   // Level 1: Tables with most FK dependencies
@@ -165,6 +196,40 @@ function importData(data: ImportResult) {
     }).run();
   }
 
+  // 3b. Create PRN availability records for per_diem staff that have available days defined.
+  //     A lightweight "PRN Import Template" schedule is created once as the FK anchor —
+  //     the scheduling engine loads PRN availability from ALL schedules regardless of ID.
+  const prnStaff = data.staff.filter(
+    (s) => s.employmentType === "per_diem" && s.prnAvailableDays.length > 0
+  );
+  if (prnStaff.length > 0) {
+    const firstUnit = data.units[0]?.name ?? "ICU";
+    db.insert(schema.schedule).values({
+      id: PRN_TEMPLATE_SCHEDULE_ID,
+      name: "PRN Import Template",
+      startDate: "2026-01-01",
+      endDate: "2027-12-31",
+      unit: firstUnit,
+      status: "archived",
+    }).run();
+
+    // Re-query staff to get their newly assigned IDs
+    const allStaff = db.select().from(schema.staff).all();
+    const staffIdByFullName = new Map(allStaff.map((s) => [`${s.firstName} ${s.lastName}`, s.id]));
+
+    for (const s of prnStaff) {
+      const staffId = staffIdByFullName.get(`${s.firstName} ${s.lastName}`);
+      if (!staffId) continue;
+      const availableDates = expandPRNDatesToNextYear(s.prnAvailableDays);
+      if (availableDates.length === 0) continue;
+      db.insert(schema.prnAvailability).values({
+        staffId,
+        scheduleId: PRN_TEMPLATE_SCHEDULE_ID,
+        availableDates,
+      }).run();
+    }
+  }
+
   // 4. Create default shift definitions
   const unitNames = data.units.map(u => u.name);
   createDefaultShiftDefinitions(unitNames);
@@ -305,17 +370,44 @@ export async function GET() {
   });
 }
 
+/**
+ * Converts an array of date strings (YYYY-MM-DD) back into a compact day-pattern
+ * string suitable for the "PRN Available Days" column (e.g. "Mon, Wed, Fri").
+ * Returns empty string if no dates are provided.
+ */
+function summarisePRNDates(dates: string[]): string {
+  if (dates.length === 0) return "";
+  const daySet = new Set(dates.map((d) => new Date(d).getDay()));
+  const allDays = [0, 1, 2, 3, 4, 5, 6];
+  const weekdays = [1, 2, 3, 4, 5];
+  const weekend = [0, 6];
+  if (allDays.every((i) => daySet.has(i))) return "All";
+  if (weekdays.every((i) => daySet.has(i)) && !daySet.has(0) && !daySet.has(6)) return "Weekdays";
+  if (weekend.every((i) => daySet.has(i)) && daySet.size === 2) return "Weekends";
+  const abbrevs = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return allDays.filter((i) => daySet.has(i)).map((i) => abbrevs[i]).join(", ");
+}
+
 // Export current database data to Excel
 function exportCurrentData(): ArrayBuffer {
   // Query current data from database
   const staffData = db.select().from(schema.staff).all();
   const staffPreferencesData = db.select().from(schema.staffPreferences).all();
+  const prnAvailabilityData = db.select().from(schema.prnAvailability).all();
   const unitsData = db.select().from(schema.unit).all();
   const holidaysData = db.select().from(schema.publicHoliday).all();
   const censusBandsData = db.select().from(schema.censusBand).all();
 
   // Create a map of staff preferences by staffId for quick lookup
   const preferencesMap = new Map(staffPreferencesData.map(p => [p.staffId, p]));
+
+  // Aggregate PRN availability dates by staffId across all records
+  const prnDatesMap = new Map<string, string[]>();
+  for (const p of prnAvailabilityData) {
+    const existing = prnDatesMap.get(p.staffId) ?? [];
+    existing.push(...((p.availableDates as string[]) ?? []));
+    prnDatesMap.set(p.staffId, existing);
+  }
 
   const workbook = XLSX.utils.book_new();
 
@@ -342,10 +434,12 @@ function exportCurrentData(): ArrayBuffer {
     "Max Consecutive Days",
     "Max Hours Per Week",
     "Avoid Weekends",
+    "PRN Available Days",
   ];
 
   const staffRows = staffData.map((s) => {
     const prefs = preferencesMap.get(s.id);
+    const prnDates = prnDatesMap.get(s.id) ?? [];
     return [
       s.firstName,
       s.lastName,
@@ -368,6 +462,7 @@ function exportCurrentData(): ArrayBuffer {
       prefs?.maxConsecutiveDays ?? 3,
       prefs?.maxHoursPerWeek ?? 40,
       prefs?.avoidWeekends ? "Yes" : "No",
+      s.employmentType === "per_diem" ? summarisePRNDates(prnDates) : "",
     ];
   });
 

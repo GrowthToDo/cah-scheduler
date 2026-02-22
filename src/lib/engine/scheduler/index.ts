@@ -1,6 +1,7 @@
 import { buildContext } from "@/lib/engine/rule-engine";
 import type { GenerationResult, SchedulerContext, WeightProfile } from "./types";
 import { greedyConstruct } from "./greedy";
+import { repairHardViolations } from "./repair";
 import { localSearch } from "./local-search";
 
 /**
@@ -45,8 +46,14 @@ export function generateSchedule(
   // Phase 1: Greedy construction
   const greedy = greedyConstruct(context, weights);
 
+  // Phase 1.5: Repair hard violations
+  // Attempts to fix remaining charge / Level-4+ / understaffing violations by
+  // moving specialised staff from lower-priority shifts into critical slots,
+  // then back-filling the vacated slots with generalist nurses.
+  const repaired = repairHardViolations(greedy, context);
+
   // Phase 2: Local search improvement
-  const improved = localSearch(greedy, context, weights, localSearchIterations);
+  const improved = localSearch(repaired, context, weights, localSearchIterations);
 
   return improved;
 }

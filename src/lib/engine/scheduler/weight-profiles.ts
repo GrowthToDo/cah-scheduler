@@ -13,6 +13,7 @@ export const BALANCED: WeightProfile = {
   skillMix: 1.0,
   float: 1.0,
   chargeClustering: 1.0,
+  agency: 2.5,       // agency markup 2–3× base pay; strong preference for regular/PRN before agency
 };
 
 /**
@@ -29,6 +30,7 @@ export const FAIR: WeightProfile = {
   skillMix: 1.0,
   float: 0.5,
   chargeClustering: 1.0,
+  agency: 1.5,       // lighter than Balanced — equitable distribution accepts agency cost when needed for coverage
 };
 
 /**
@@ -43,6 +45,7 @@ export const COST_OPTIMIZED: WeightProfile = {
   consecutiveWeekends: 1.0,
   holidayFairness: 1.0,
   skillMix: 0.5,
-  float: 3.0,
+  float: 2.0,    // lowered from 3.0 — float differentials are a flat add-on, cheaper than OT (1.5× base pay)
   chargeClustering: 0.5,
+  agency: 5.0,   // highest penalty — agency markup 2–3× base pay; cost profile avoids agency unless no alternative
 };

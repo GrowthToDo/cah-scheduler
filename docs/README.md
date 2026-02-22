@@ -82,4 +82,4 @@ This application helps nurse managers create fair, compliant, and cost-effective
 
 ---
 
-*Last Updated: February 2026 — v1.4.4 (auto-generation, charge nurse competency, three-section violations modal, overtime/weekend rule improvements, scenario switching fix, scheduling penalty re-calibration, charge nurse assignment dialog fixes)*
+*Last Updated: February 2026 — v1.4.5 (auto-generation, charge nurse competency, three-section violations modal, overtime/weekend rule improvements, scenario switching fix, scheduling penalty re-calibration, charge nurse assignment dialog fixes, charge protection look-ahead, PRN availability improvements)*

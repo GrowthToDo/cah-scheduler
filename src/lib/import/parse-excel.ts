@@ -24,6 +24,12 @@ export interface StaffImport {
   maxConsecutiveDays: number;
   maxHoursPerWeek: number;
   avoidWeekends: boolean;
+  /**
+   * Days of week this PRN/per_diem staff is generally available.
+   * Full day names: "Sunday", "Monday", …, "Saturday".
+   * Empty for non-per_diem staff.
+   */
+  prnAvailableDays: string[];
 }
 
 export interface UnitImport {
@@ -138,6 +144,35 @@ function formatDate(value: unknown): string {
   return new Date().toISOString().split("T")[0];
 }
 
+// Map abbreviated and full day names to full capitalized day names
+const PRN_DAY_ABBREV_MAP: Record<string, string> = {
+  sun: "Sunday", sunday: "Sunday",
+  mon: "Monday", monday: "Monday",
+  tue: "Tuesday", tuesday: "Tuesday",
+  wed: "Wednesday", wednesday: "Wednesday",
+  thu: "Thursday", thursday: "Thursday",
+  fri: "Friday", friday: "Friday",
+  sat: "Saturday", saturday: "Saturday",
+};
+
+/**
+ * Parse the "PRN Available Days" cell value into an array of full day names.
+ * Accepts: "All", "Weekdays", "Weekends", or a comma-separated list of
+ * abbreviated or full day names (e.g. "Mon, Wed, Fri" or "Monday, Friday").
+ */
+function parsePRNAvailableDays(value: unknown): string[] {
+  if (!value || typeof value !== "string") return [];
+  const raw = value.trim().toLowerCase();
+  if (!raw) return [];
+  if (raw === "all") return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  if (raw === "weekdays") return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+  if (raw === "weekends") return ["Saturday", "Sunday"];
+  return raw
+    .split(",")
+    .map((d) => PRN_DAY_ABBREV_MAP[d.trim()])
+    .filter((d): d is string => d !== undefined);
+}
+
 // Helper to normalize employment type
 function normalizeEmploymentType(value: string): string {
   const lower = value.toLowerCase().trim().replace(/[\s-]/g, "_");
@@ -227,6 +262,12 @@ function parseStaffSheet(
     const maxHoursPerWeek = parseNumber(row["Max Hours Per Week"] ?? row["MaxHoursPerWeek"] ?? row["max_hours_per_week"], 40, 8, 60);
     const avoidWeekends = parseBoolean(row["Avoid Weekends"] ?? row["AvoidWeekends"] ?? row["avoid_weekends"]);
 
+    // PRN available days — only relevant for per_diem employment type
+    const prnAvailableDays =
+      employmentType === "per_diem"
+        ? parsePRNAvailableDays(row["PRN Available Days"] ?? row["PRNAvailableDays"] ?? row["prn_available_days"])
+        : [];
+
     // Add warnings for missing optional data
     if (!homeUnit) {
       warnings.push({ sheet: "Staff", row: rowNum, message: `No Home Unit specified for ${firstName} ${lastName}` });
@@ -255,6 +296,7 @@ function parseStaffSheet(
       maxConsecutiveDays,
       maxHoursPerWeek,
       avoidWeekends,
+      prnAvailableDays,
     });
   });
 
@@ -485,8 +527,10 @@ export function generateTemplate(): ArrayBuffer {
     "Max Consecutive Days",
     "Max Hours Per Week",
     "Avoid Weekends",
+    "PRN Available Days",
   ];
-  const staffExample = [
+  // Full-time example — PRN Available Days left blank (not applicable)
+  const staffExampleFT = [
     "Maria",
     "Garcia",
     "RN",
@@ -508,8 +552,34 @@ export function generateTemplate(): ArrayBuffer {
     "4",
     "40",
     "No",
+    "", // PRN Available Days — not used for full_time
   ];
-  const staffSheet = XLSX.utils.aoa_to_sheet([staffHeaders, staffExample]);
+  // PRN/per_diem example — shows accepted formats: day names, "Weekdays", "Weekends", or "All"
+  const staffExamplePRN = [
+    "Patricia",
+    "Clark",
+    "RN",
+    "per_diem",
+    "0.0",
+    "ICU",
+    "",
+    "3",
+    "No",
+    "4",
+    "patricia.clark@hospital.com",
+    "555-0201",
+    "2023-03-01",
+    "No",
+    "No",
+    "PRN — available Mon/Wed/Fri",
+    "any",
+    "",
+    "3",
+    "40",
+    "No",
+    "Mon, Wed, Fri", // PRN Available Days — comma-separated day abbreviations
+  ];
+  const staffSheet = XLSX.utils.aoa_to_sheet([staffHeaders, staffExampleFT, staffExamplePRN]);
   XLSX.utils.book_append_sheet(workbook, staffSheet, "Staff");
 
   // Units sheet
