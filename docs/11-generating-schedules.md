@@ -95,6 +95,22 @@ Click any shift cell in the grid to open the violations detail panel for that sh
 
 ---
 
+## Automatic Hard-Violation Repair
+
+After the initial schedule is built, the system runs an automatic repair pass before finalising the roster. This pass looks for any remaining hard violations — missing charge nurse, missing Level 4+ ICU supervisor, understaffed slots — and attempts to resolve each one without manager involvement.
+
+For each violation it tries two approaches in order:
+
+1. **Direct assignment** — find an eligible staff member not yet on the affected shift and assign them. This catches cases where the initial build was overly cautious about "saving" a nurse for a later shift that turned out not to need them.
+
+2. **Staff swap** — move a Level 4+ nurse from a lower-priority shift to the critical slot, then back-fill the vacated slot with any eligible nurse. Moving the nurse changes their weekly hour totals, which can bring them within the 60-hour rolling limit for the critical shift even if they appeared ineligible before.
+
+This process runs up to three times in sequence, because fixing one violation (adding a Level 4+ supervisor) can make other staff eligible for the same shift, which the next pass then fills.
+
+A hard violation is only left in the final schedule if there is genuinely no eligible staff member anywhere in the roster — for example, every charge-qualified nurse is on approved leave or at their hour limit. In that case the shift is flagged for manager review.
+
+---
+
 ## What Happens If a Shift Can't Be Filled?
 
 If no eligible staff member exists for a slot — because everyone is on leave, on another shift, or at their hour limit — the system leaves the slot empty rather than breaking a hard rule. This is called an **understaffed shift**.

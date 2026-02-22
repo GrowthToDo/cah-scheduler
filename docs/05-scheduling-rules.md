@@ -193,12 +193,18 @@ These are **preferences**. The scheduler tries to satisfy them but can break the
 - Applies large penalty for overtime
 - But if coverage requires it, overtime happens
 
-**Which shift gets flagged?** Only the shift that actually pushes the person over the limit is marked as a violation — not every shift they worked that week. This makes it easy to see which single assignment caused the problem.
+**Which shifts get flagged?**
+- **Actual overtime (above 40 h/week):** Only the one shift that first pushes the person over 40 hours is flagged — not every shift they worked that week. This pinpoints the single assignment that caused the problem.
+- **Extra hours (above FTE target, below 40 h):** Every shift worked above the FTE target is flagged, using only the hours that *that shift alone* adds. For example, if a 0.5 FTE nurse (20 h/week) works three 8-hour shifts (24 h total), the second and third shifts each show a separate violation for the hours they individually contributed above 20. This gives you a clear picture of which specific shifts are over-scheduling a part-time nurse.
 
 **Agency staff are not flagged.** Agency and on-demand staff have no set weekly hours (their FTE is 0), so there is no overtime threshold to apply. They can work as many shifts as needed without triggering this warning.
 
 **How the scheduler avoids overtime proactively:**
-When building the schedule, the system gives a small preference to staff who have worked fewer hours so far that week. Think of it like a charge nurse asking "who has the most available hours?" before assigning the next shift. This means float pool staff and part-timers who are early in their week tend to be picked before regular staff who are close to their 40-hour limit — which naturally reduces overtime before it happens.
+Part-time and extra-hours nurses are always scheduled before a full-time nurse would go into overtime. Think of it in two tiers:
+1. **First**, fill the shift from staff whose total hours for the week would stay at or below 40.
+2. **Only if no one in tier 1 is eligible** (on leave, on another shift, at rest, etc.) does the scheduler consider someone who would cross into overtime.
+
+This is a firm rule, not just a preference — a 0.5 FTE nurse working 36 hours (extra hours, but no overtime pay) will always be chosen over a 1.0 FTE nurse who would go to 48 hours, regardless of other scoring factors. If overtime still appears in the final schedule, it means every eligible candidate for that slot would have caused overtime.
 
 ### 2. Weekend Shift Requirements
 
