@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.10] - 2026-02-22
+
+### Fixed
+
+- **Local search no longer corrupts charge nurse assignments or Level 2 supervision.** This was the root cause of hard violations ("Charge Nurse Required", "Level 2 ICU/ER Supervision") surviving even after the repair phase had correctly fixed them.
+
+  The local search improves a schedule by randomly swapping two staff members between different shifts. Two gaps in the swap validity check allowed the search to create new hard violations:
+
+  **Gap 1 — Charge-slot inheritance:** When two assignments are swapped, the code uses `{...a, staffId: b.staffId}` to build the new slot. This spreads all of assignment `a`'s properties — including `isChargeNurse: true` — onto the incoming staff member, regardless of whether that person is actually charge-qualified. A Level 4+ charge nurse could be swapped out and a Level 3 nurse would inherit the `isChargeNurse = true` flag. The individual `passesHardRules` check does not catch this because it only verifies the incoming person's general eligibility for the shift (rest, hours, ICU competency ≥ 2), not whether they can serve as charge nurse. Result: a Level 3 nurse shows the "Charge" badge in the UI, but the charge-nurse hard rule correctly flags the shift as lacking a valid charge nurse.
+
+  **Gap 2 — Level 2 supervision:** When a Level 4+ nurse is swapped out of an ICU/ER shift, any Level 2 nurses already on that shift lose their supervisor. The `passesHardRules` call only validates the incoming staff member's individual eligibility — it does not check whether Level 2 nurses already on the shift are now unsupervised after the Level 4+ departs.
+
+  **Fixes added to `isSwapValid`:**
+  1. Block any swap where a non-charge-qualified (or Level 1–3) staff member would inherit a `isChargeNurse = true` slot.
+  2. After building the temporary state (both swap candidates removed), check each ICU/ER shift: if it still has Level 2 nurses after removing the outgoing staff, the incoming staff must be Level 4+ or the shift must retain another Level 4+ from its remaining roster. If neither is true, the swap is rejected.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/local-search.ts` — `isICUUnit` imported; two collective constraint guards added to `isSwapValid` before individual `passesHardRules` calls
+
+---
+
 ## [1.4.9] - 2026-02-22
 
 ### Fixed

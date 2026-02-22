@@ -1,7 +1,7 @@
 import type { StaffInfo } from "@/lib/engine/rules/types";
 import type { AssignmentDraft, GenerationResult, SchedulerContext, WeightProfile } from "./types";
 import { SchedulerState } from "./state";
-import { passesHardRules } from "./eligibility";
+import { passesHardRules, isICUUnit } from "./eligibility";
 import { softPenalty } from "./scoring";
 
 /**
@@ -70,6 +70,47 @@ function isSwapValid(
   const remaining = allAssignments.filter((_, i) => i !== indexA && i !== indexB);
   const tempState = new SchedulerState();
   for (const r of remaining) tempState.addAssignment(r);
+
+  // ── Collective constraint checks ────────────────────────────────────────────
+
+  // Guard 1: Charge-slot integrity.
+  // isChargeNurse is a SLOT property (spread via {...a}). If staffB would inherit
+  // a charge slot but is not charge-qualified Level 4+, the assignment becomes
+  // invalid without any individual hard-rule check catching it.
+  if (a.isChargeNurse && (!staffB.isChargeNurseQualified || staffB.icuCompetencyLevel < 4)) return false;
+  if (b.isChargeNurse && (!staffA.isChargeNurseQualified || staffA.icuCompetencyLevel < 4)) return false;
+
+  // Guard 2: Level 2 supervision.
+  // passesHardRules checks whether the INCOMING staff can be placed on a shift,
+  // not whether REMOVING someone breaks supervision for staff already there.
+  // If staffA (Level 4+) leaves shiftA and shiftA still has Level 2 nurses,
+  // shiftA must retain at least one other Level 4+ or the incoming staffB must be Level 4+.
+  if (isICUUnit(shiftA.unit)) {
+    const remainingOnA = tempState.getShiftAssignments(shiftA.id);
+    const hasLevel2OnA = remainingOnA.some(
+      (r) => (context.staffMap.get(r.staffId)?.icuCompetencyLevel ?? 0) === 2
+    );
+    if (hasLevel2OnA) {
+      const stillHasLevel4OnA = remainingOnA.some(
+        (r) => (context.staffMap.get(r.staffId)?.icuCompetencyLevel ?? 0) >= 4
+      );
+      if (!stillHasLevel4OnA && staffB.icuCompetencyLevel < 4) return false;
+    }
+  }
+  if (isICUUnit(shiftB.unit)) {
+    const remainingOnB = tempState.getShiftAssignments(shiftB.id);
+    const hasLevel2OnB = remainingOnB.some(
+      (r) => (context.staffMap.get(r.staffId)?.icuCompetencyLevel ?? 0) === 2
+    );
+    if (hasLevel2OnB) {
+      const stillHasLevel4OnB = remainingOnB.some(
+        (r) => (context.staffMap.get(r.staffId)?.icuCompetencyLevel ?? 0) >= 4
+      );
+      if (!stillHasLevel4OnB && staffA.icuCompetencyLevel < 4) return false;
+    }
+  }
+
+  // ── Individual eligibility checks ────────────────────────────────────────────
 
   // Check: staffA → shiftB, staffB → shiftA
   if (!passesHardRules(staffA, shiftB, tempState, context)) return false;

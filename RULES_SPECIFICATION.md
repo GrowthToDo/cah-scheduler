@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.4.9
-**Last Updated:** February 22, 2026 (v1.4.9)
+**Document Version:** 1.4.10
+**Last Updated:** February 22, 2026 (v1.4.10)
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -525,6 +525,7 @@ Please review each section and note any changes needed:
 | 1.4.2 | Feb 20, 2026 | **Overtime rule (§4.1):** Violations now attach to the specific shift that crosses the threshold, not staff-level. Agency/on-demand staff with FTE = 0 are exempt. **Weekend rule (§4.2):** Logic flipped from flagging shortfall to flagging excess assignments beyond the required count; each excess assignment is flagged with a shift-specific violation. Both changes make the violations panel actionable — each flagged shift shows exactly which assignment to review. |
 | 1.4.3 | Feb 22, 2026 | **Balanced OT weight (§12.5):** Raised from 1.0 to 1.5 so actual overtime is consistently more expensive than any single preference violation, matching the real 1.5× payroll cost. **Capacity-spreading bonus (§12.4):** Small incentive added to prefer less-loaded staff as a tiebreaker, reducing overtime accumulation on regular staff and preserving float pool capacity. |
 | 1.4.4 | Feb 22, 2026 | **Assignment dialog charge validation (§3.2):** `needsCharge` condition now requires Level 4+ (not just any `isChargeNurse` flag). "Assign as Charge" button is gated to Level 4+ nurses. Assigning a new charge nurse demotes any previous charge on the same shift so the hard violation resolves immediately. |
+| 1.4.10 | Feb 22, 2026 | **Local search collective constraint guards (§12.2):** Two gaps in `isSwapValid` allowed the local search to undo repair-phase fixes. (1) Non-charge-qualified staff could inherit `isChargeNurse = true` via object spread. (2) Swapping a Level 4+ nurse out of an ICU/ER shift could leave Level 2 nurses without supervision. Both are now blocked before individual `passesHardRules` checks run. |
 | 1.4.5 | Feb 22, 2026 | **Charge protection guard (§12.2):** Look-ahead added to greedy Pass 2 — Level 4+ nurses are protected from regular slots when they are the sole remaining charge candidate for an upcoming ICU/ER shift within 7 days. Eliminates Sunday hard violations in the FAIR schedule caused by the low overtime weight exhausting charge nurses. **PRN availability (§3.10):** Lookup broadened to aggregate across all schedule submissions; standing availability is honoured by any new schedule covering the same dates. **Cost-Optimized float weight (§12.5):** Corrected 3.0 → 2.0 to reflect that float differentials cost less than overtime. |
 | 1.4.6 | Feb 22, 2026 | **Agency penalty added (§12.4, §12.5):** New `agency` weight component applies a flat penalty whenever an agency nurse is considered for a slot. Ensures the scheduler exhausts regular, float, and PRN pools before drawing on agency (markup 2–3× base pay). Weights: Balanced 2.5, Fairness-Optimized 1.5, Cost-Optimized 5.0. **PRN Available Days column in Excel (§3.10):** Import template and export now include a "PRN Available Days" column for per_diem staff. Accepted formats: comma-separated day abbreviations (e.g. "Mon, Wed, Fri"), "Weekdays", "Weekends", or "All". Importing this column auto-creates `prn_availability` records spanning the next 12 months — PRN staff are immediately usable in auto-generated schedules without a manual availability submission step. |
 | 1.4.7 | Feb 22, 2026 | **Weekend ICU charge shifts prioritised first in greedy (§12.2):** Weekend charge slots (Sat/Sun) were previously sorted after all weekday charge slots (earliest date first within priority 1). In the FAIR profile — where the low overtime weight allows charge nurses to accumulate hours freely Mon–Fri — this meant weekend slots arrived last with the charge pool already near its 60h rolling limit. Splitting priority 1 into weekend-ICU-charge (new priority 1) and weekday-ICU-charge (priority 2) ensures Sat/Sun charge shifts get first pick of Level 4+ nurses before any weekday shift has consumed their capacity. Applies to all three schedule variants; Balanced and Cost-Optimized are unaffected in practice because their higher overtime penalties already prevent charge-pool depletion. |
@@ -601,11 +602,18 @@ A violation is preserved in the output **only when no eligible candidate exists 
 
 #### Phase 2: Local Search (Swap Improvement)
 
-Up to 500 random swap attempts are made between pairs of assignments on different shifts. A swap is accepted only if:
-- Both staff members pass all hard rules in their swapped positions
+Up to 1,500 random swap attempts are made between pairs of assignments on different shifts. A swap is accepted only if:
+- The swap passes all collective and individual hard rule checks (see below)
 - The total soft penalty of the schedule decreases
 
 This monotonic hill-climbing approach escapes greedy local optima without ever violating hard rules.
+
+**Collective checks applied before individual eligibility** (added in v1.4.10):
+
+| Check | Rule |
+|-------|------|
+| **Charge-slot integrity** | If an assignment has `isChargeNurse = true`, the incoming staff must be charge-qualified (Level 4+ and `isChargeNurseQualified = true`). The `isChargeNurse` flag is a slot property spread via object spread — without this check, a Level 3 nurse can silently inherit the flag. |
+| **Level 2 supervision residual** | After removing the outgoing staff from an ICU/ER shift, if Level 2 nurses remain on that shift, the shift must still have at least one Level 4+ supervisor (either from remaining staff or from the incoming staff member). |
 
 ---
 
