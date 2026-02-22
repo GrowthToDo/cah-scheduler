@@ -1,4 +1,4 @@
-import type { RuleEvaluator, RuleContext, RuleViolation } from "./types";
+import type { RuleEvaluator, RuleContext, RuleViolation, AssignmentInfo } from "./types";
 import { db } from "@/db";
 import { staffHolidayAssignment } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -21,8 +21,11 @@ function getLogicalHolidayName(holidayName: string): string {
 
 /**
  * Weekend Count Rule (Soft)
- * Staff must work a minimum number of weekend shifts per schedule period.
+ * Flags each weekend assignment beyond the required count per schedule period.
  * Default is 3 weekend shifts per 6-week schedule.
+ * Once a staff member has worked the required number of weekends, any additional
+ * weekend assignment is flagged on that specific shift — the manager can swap it
+ * for a non-weekend shift to reduce the penalty.
  * Staff marked as weekend_exempt are excluded.
  */
 export const weekendCountRule: RuleEvaluator = {
@@ -33,44 +36,45 @@ export const weekendCountRule: RuleEvaluator = {
   evaluate: (context: RuleContext): RuleViolation[] => {
     const violations: RuleViolation[] = [];
 
-    // Get required count from unit config or defaults
     const requiredCount = context.unitConfig?.weekendShiftsRequired ?? 3;
 
-    // Helper to check if date is weekend
     const isWeekend = (dateStr: string): boolean => {
       const date = new Date(dateStr);
       const day = date.getDay();
-      return day === 0 || day === 6; // Sunday = 0, Saturday = 6
+      return day === 0 || day === 6;
     };
 
-    // Count weekend shifts per staff
-    const staffWeekendCounts = new Map<string, number>();
+    // Collect all weekend assignments per staff
+    const staffWeekendAssignments = new Map<string, AssignmentInfo[]>();
     for (const a of context.assignments) {
       if (!isWeekend(a.date)) continue;
-      const count = staffWeekendCounts.get(a.staffId) ?? 0;
-      staffWeekendCounts.set(a.staffId, count + 1);
+      const list = staffWeekendAssignments.get(a.staffId) ?? [];
+      list.push(a);
+      staffWeekendAssignments.set(a.staffId, list);
     }
 
-    // Check each active staff member
-    for (const [staffId, staffInfo] of context.staffMap) {
-      if (!staffInfo.isActive) continue;
-      if (staffInfo.weekendExempt) continue; // Skip exempt staff
+    // Flag each assignment beyond the required count
+    for (const [staffId, assignments] of staffWeekendAssignments) {
+      const staffInfo = context.staffMap.get(staffId);
+      if (!staffInfo?.isActive || staffInfo.weekendExempt) continue;
 
-      const weekendCount = staffWeekendCounts.get(staffId) ?? 0;
+      const totalWeekendShifts = assignments.length;
+      if (totalWeekendShifts <= requiredCount) continue;
 
-      if (weekendCount < requiredCount) {
-        const shortfall = requiredCount - weekendCount;
-        // Penalty proportional to shortfall
-        const penaltyScore = shortfall * 0.5;
+      // Sort chronologically — the first `requiredCount` are the required ones;
+      // everything after is excess and gets flagged on its specific shift
+      const sorted = [...assignments].sort((a, b) => a.date.localeCompare(b.date));
+      const excessAssignments = sorted.slice(requiredCount);
 
+      for (const a of excessAssignments) {
         violations.push({
           ruleId: "weekend-count",
           ruleName: "Weekend Shifts Required",
           ruleType: "soft",
-          shiftId: "",
+          shiftId: a.shiftId,
           staffId,
-          description: `${staffInfo.firstName} ${staffInfo.lastName} has only ${weekendCount} weekend shifts, ${shortfall} below the required ${requiredCount}`,
-          penaltyScore,
+          description: `${staffInfo.firstName} ${staffInfo.lastName} already has ${requiredCount} required weekend shifts — this is extra weekend shift ${sorted.indexOf(a) + 1} of ${totalWeekendShifts}. Consider swapping for a weekday shift.`,
+          penaltyScore: 0.5,
         });
       }
     }

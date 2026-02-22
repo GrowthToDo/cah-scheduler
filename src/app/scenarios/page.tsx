@@ -313,7 +313,9 @@ export default function ScenariosPage() {
                         : "-"}
                     </span>
                   </div>
-                  {s.status === "draft" && (
+                  {s.status === "selected" ? (
+                    <span className="text-xs text-green-600 font-medium">Active schedule</span>
+                  ) : (
                     <div className="flex gap-1">
                       <Button
                         size="sm"
@@ -322,17 +324,16 @@ export default function ScenariosPage() {
                       >
                         {applyingId === s.id ? "Applying…" : "Apply"}
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleReject(s.id)}
-                      >
-                        Reject
-                      </Button>
+                      {s.status === "draft" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReject(s.id)}
+                        >
+                          Reject
+                        </Button>
+                      )}
                     </div>
-                  )}
-                  {s.status === "selected" && (
-                    <span className="text-xs text-green-600 font-medium">Active schedule</span>
                   )}
                 </div>
               </CardContent>

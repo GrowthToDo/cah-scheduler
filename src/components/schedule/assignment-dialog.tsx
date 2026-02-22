@@ -92,9 +92,12 @@ export function AssignmentDialog({
 
   if (!shift) return null;
 
+  // A shift still "needs charge" if no VALID charge nurse (Level 4+) is assigned.
+  // A Level 3 nurse with isChargeNurse=true satisfies the flag but violates the
+  // hard rule, so we must not treat them as a valid charge nurse here.
   const needsCharge =
     shift.requiresChargeNurse &&
-    !shift.assignments.some((a) => a.isChargeNurse);
+    !shift.assignments.some((a) => a.isChargeNurse && a.staffCompetency >= 4);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -240,7 +243,7 @@ export function AssignmentDialog({
                             )}
                           </div>
                           <div className="flex gap-1">
-                            {s.isChargeNurseQualified && needsCharge && (
+                            {s.isChargeNurseQualified && s.icuCompetencyLevel >= 4 && needsCharge && (
                               <Button
                                 size="sm"
                                 onClick={() => onAssign(shift.id, s.id, true)}

@@ -193,6 +193,13 @@ These are **preferences**. The scheduler tries to satisfy them but can break the
 - Applies large penalty for overtime
 - But if coverage requires it, overtime happens
 
+**Which shift gets flagged?** Only the shift that actually pushes the person over the limit is marked as a violation — not every shift they worked that week. This makes it easy to see which single assignment caused the problem.
+
+**Agency staff are not flagged.** Agency and on-demand staff have no set weekly hours (their FTE is 0), so there is no overtime threshold to apply. They can work as many shifts as needed without triggering this warning.
+
+**How the scheduler avoids overtime proactively:**
+When building the schedule, the system gives a small preference to staff who have worked fewer hours so far that week. Think of it like a charge nurse asking "who has the most available hours?" before assigning the next shift. This means float pool staff and part-timers who are early in their week tend to be picked before regular staff who are close to their 40-hour limit — which naturally reduces overtime before it happens.
+
 ### 2. Weekend Shift Requirements
 
 **What it means:** Each person should work a minimum number of weekend shifts per period.
@@ -207,6 +214,8 @@ These are **preferences**. The scheduler tries to satisfy them but can break the
 - Some people may have 2, some may have 4 - close enough
 - Weekend-exempt staff are excluded
 - But we aim for fairness
+
+**How violations are shown:** The system does *not* flag staff who have too *few* weekend shifts — that would mean showing a warning with nothing to fix. Instead, it flags each shift that is *one too many* for that person. For example, if the required count is 3 and someone is assigned to 5 weekend shifts, the 4th and 5th weekend shifts are flagged. Removing or swapping either one clears the violation. Staff who are at or below the required count will not see any weekend violation.
 
 ### 3. Consecutive Weekends Penalty
 

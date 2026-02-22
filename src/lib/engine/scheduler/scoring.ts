@@ -38,6 +38,17 @@ export function softPenalty(
     if (extraHours > 0) penalty += weights.overtime * 0.3 * (extraHours / 12);
   }
 
+  // Capacity-spreading bonus: give a small incentive to prefer staff who have more
+  // remaining hours before hitting the 40h OT threshold. Acts as a tiebreaker that
+  // mirrors real charge-nurse behaviour ("ask whoever has worked the least this week").
+  // Float pool staff — typically earlier in their week when critical ICU shifts are
+  // scheduled first — naturally benefit most, which prevents temporal depletion of
+  // their capacity and reduces overtime on regular unit staff later in the schedule.
+  // Coefficient (0.1) is intentionally small: it breaks ties without overriding
+  // meaningful clinical penalties (skill mix, charge requirement, preferences).
+  const remainingBeforeOT = Math.max(0, 40 - weekHours);
+  penalty -= weights.overtime * 0.1 * (remainingBeforeOT / 40);
+
   // ── 2. Preference mismatch ──────────────────────────────────────────────────
   if (staffInfo.preferences) {
     const { preferredShift, preferredDaysOff, avoidWeekends } = staffInfo.preferences;

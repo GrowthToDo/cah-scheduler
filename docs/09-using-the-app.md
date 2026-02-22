@@ -223,8 +223,8 @@ The Balanced variant is applied to the schedule automatically. You can review th
 | Generate all three variants | Select a schedule, click "Generate Schedule" |
 | Watch generation progress | Progress bar and phase label appear automatically |
 | Compare variants | View score bars side-by-side on the cards |
-| Switch to a different variant | Click **"Apply"** on the card you prefer |
-| Dismiss a variant you don't want | Click **"Reject"** |
+| Switch to a different variant | Click **"Apply"** on the card you prefer (available on any non-active variant, including previously rejected ones) |
+| Dismiss a variant you don't want | Click **"Reject"** (only available while the variant is in Draft status) |
 | See understaffed shifts | Check the yellow warning panel after generation |
 
 ### Understaffing Warnings

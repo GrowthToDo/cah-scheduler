@@ -153,6 +153,17 @@ export default function ScheduleBuilderPage() {
   const softViolationMap = new Map<string, string[]>();
   const violationDetailsMap = new Map<string, RuleViolation[]>();
   if (evaluation) {
+    // Collect staff-level violations (weekend shortfall, overtime, etc.)
+    // These have no shiftId — they apply to a staff member across the whole schedule
+    const staffViolationMap = new Map<string, RuleViolation[]>();
+    for (const v of evaluation.softViolations) {
+      if (!v.shiftId && v.staffId) {
+        const list = staffViolationMap.get(v.staffId) ?? [];
+        list.push({ ...v, ruleType: "soft" });
+        staffViolationMap.set(v.staffId, list);
+      }
+    }
+
     for (const v of evaluation.hardViolations) {
       if (v.shiftId) {
         const list = hardViolationMap.get(v.shiftId) ?? [];
@@ -173,6 +184,20 @@ export default function ScheduleBuilderPage() {
         const details = violationDetailsMap.get(v.shiftId) ?? [];
         details.push({ ...v, ruleType: "soft" });
         violationDetailsMap.set(v.shiftId, details);
+      }
+    }
+
+    // Attach staff-level violations to each shift the staff member is assigned to
+    for (const shift of schedule.shifts) {
+      for (const assignment of shift.assignments) {
+        const staffViolations = staffViolationMap.get(assignment.staffId);
+        if (!staffViolations?.length) continue;
+
+        const softList = softViolationMap.get(shift.id) ?? [];
+        softViolationMap.set(shift.id, [...softList, ...staffViolations.map((v) => v.description)]);
+
+        const details = violationDetailsMap.get(shift.id) ?? [];
+        violationDetailsMap.set(shift.id, [...details, ...staffViolations]);
       }
     }
   }

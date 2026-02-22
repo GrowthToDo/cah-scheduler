@@ -1,7 +1,7 @@
 # CAH Scheduler - Complete Rules Specification
 
-**Document Version:** 1.4.0
-**Last Updated:** February 20, 2026
+**Document Version:** 1.4.4
+**Last Updated:** February 22, 2026
 **Purpose:** This document describes all scheduling rules and logic implemented in the CAH Scheduler application. Please review and mark any rules that need modification.
 
 ---
@@ -164,7 +164,7 @@ Hard rules are constraints that **cannot be broken**. The scheduler will not cre
 Soft rules are **preferences** that the scheduler tries to optimize. Violations incur penalty scores, and the scheduler tries to minimize total penalties. These can be overridden by managers when necessary.
 
 ### 4.1 Overtime & Extra Hours *(UPDATED)*
-**Previous Logic (Incorrect):** Any hours over (FTE × 40) counted as overtime
+**Previous Logic (Incorrect):** Any hours over (FTE × 40) counted as overtime; violation was attached staff-level (not to a specific shift)
 
 **Current Logic:**
 | Scenario | Penalty Level | Example |
@@ -172,18 +172,29 @@ Soft rules are **preferences** that the scheduler tries to optimize. Violations 
 | Hours > 40 in a week | **HIGH** penalty (actual overtime) | A 1.0 FTE nurse working 44 hours = 4 hours OT |
 | Hours > (FTE × 40) but ≤ 40 | **LOW** penalty (extra hours, not OT) | A 0.9 FTE nurse (36 standard hours) working 40 hours = 4 extra hours but NOT overtime |
 
+**Exemption:** Staff with **FTE = 0** (Agency / on-demand) are **fully exempt** from this rule. They have no weekly hours commitment, so no "standard" or "overtime" threshold applies to them.
+
+**Violation Attribution:** The violation is emitted on the **specific shift that crosses the threshold**, not retroactively on all of that staff member's shifts. Assignments before the threshold are clean; only the triggering shift is flagged. This makes the penalty actionable — swapping or removing that one shift eliminates the violation.
+
 **Rationale:** It's better to pay staff extra shift premium than overtime rates or agency rates.
 
 **Penalty Weights:**
 - Actual OT (>40h): Weight = 1.0 (normalized so 12 hours OT = 1.0 penalty)
 - Extra hours (≤40h): Weight = 0.3
 
-### 4.2 Weekend Shifts Required *(NEW)*
+### 4.2 Weekend Shifts Required *(UPDATED)*
 - **Rule:** Each staff member must work a minimum number of weekend shifts per schedule period
 - **Default:** 3 weekend shifts per 6-week schedule
 - **Configurable:** Yes, per unit
 - **Exemption:** Staff marked as "Weekend Exempt" are excluded
-- **Penalty:** Proportional to shortfall (e.g., 2 short = higher penalty than 1 short)
+
+**How violations are raised (current logic):**
+The rule flags assignments **beyond** the required count — i.e., excess weekend shifts — rather than flagging a shortfall. Assignments up to the required count are accepted without penalty. Each assignment beyond that limit generates one violation, attached to that specific shift. This means:
+- The violation appears on the exact shift that is "one too many", making it easy to identify which assignment to remove or swap
+- A staff member with exactly the required number of weekend shifts has zero violations — they are meeting the target
+- A staff member with fewer than the required count has no violation either; shortfall is handled through the scheduler's optimisation pressure (preferring to assign that person on weekends when possible), not through explicit penalties
+
+**Penalty per excess shift:** 0.5 per weekend shift beyond the required count
 
 ### 4.3 Consecutive Weekends Penalty *(NEW)*
 - **Rule:** Penalize staff who work more than the maximum consecutive weekends
@@ -511,6 +522,10 @@ Please review each section and note any changes needed:
 | 1.2.3 | Feb 18, 2026 | **Staff preferences in Excel:** Staff preferences can now be imported/exported via Excel. New columns in Staff sheet: Preferred Shift, Preferred Days Off, Max Consecutive Days, Max Hours Per Week, Avoid Weekends |
 | 1.3.0 | Feb 20, 2026 | **Section 12 added:** Scheduling Algorithm — describes greedy construction, local search, three weight profiles, hard rule eligibility, soft penalty scoring, understaffing handling, and audit behavior for automated schedule generation |
 | 1.4.0 | Feb 20, 2026 | **Charge nurse competency (§1.3, §3.2):** Level 4+ is now a hard requirement for charge nurse assignment. Level 5 is the preferred primary charge; Level 4 is stand-in only. `isChargeNurseQualified` flag alone is insufficient for levels 1–3. **60h rolling window (§3.13):** System now checks all 7 windows containing the shift date, not just the backward-looking window, to catch violations caused by future shifts assigned earlier in the greedy pass. |
+| 1.4.2 | Feb 20, 2026 | **Overtime rule (§4.1):** Violations now attach to the specific shift that crosses the threshold, not staff-level. Agency/on-demand staff with FTE = 0 are exempt. **Weekend rule (§4.2):** Logic flipped from flagging shortfall to flagging excess assignments beyond the required count; each excess assignment is flagged with a shift-specific violation. Both changes make the violations panel actionable — each flagged shift shows exactly which assignment to review. |
+| 1.4.3 | Feb 22, 2026 | **Balanced OT weight (§12.5):** Raised from 1.0 to 1.5 so actual overtime is consistently more expensive than any single preference violation, matching the real 1.5× payroll cost. **Capacity-spreading bonus (§12.4):** Small incentive added to prefer less-loaded staff as a tiebreaker, reducing overtime accumulation on regular staff and preserving float pool capacity. |
+| 1.4.4 | Feb 22, 2026 | **Assignment dialog charge validation (§3.2):** `needsCharge` condition now requires Level 4+ (not just any `isChargeNurse` flag). "Assign as Charge" button is gated to Level 4+ nurses. Assigning a new charge nurse demotes any previous charge on the same shift so the hard violation resolves immediately. |
+| 1.4.3 | Feb 22, 2026 | **Scheduler penalty re-calibration (§12.4, §12.5):** (1) Balanced variant `overtime` weight raised from 1.0 → 1.5, making actual OT (a real 1.5× payroll cost) consistently more expensive than any single preference violation. (2) Capacity-spreading bonus added to the scoring function: a small incentive (−`overtime_weight × 0.1 × remaining_hours/40`) prefers staff with more remaining hours before the 40h threshold. Acts as a tiebreaker that naturally spreads assignments across the week, reduces temporal depletion of float pool capacity, and decreases unnecessary overtime on regular unit staff. |
 
 ---
 
@@ -593,6 +608,7 @@ Each component is multiplied by the weight for that component in the active vari
 |-----------|---------------------|-----------|
 | **Overtime — heavy** | + `weight × (OT hours / 12)` | Total weekly hours would exceed 40 |
 | **Overtime — light** | + `weight × 0.3 × (extra hours / 12)` | Total would exceed FTE target but not 40h |
+| **Capacity bonus** | − `weight × 0.1 × (remaining hours before 40h / 40)` | Always applied; highest for staff at 0h, zero for staff already at 40h |
 | **Shift type mismatch** | + `weight × 0.5` | Candidate prefers a different shift type |
 | **Preferred day off** | + `weight × 0.7` | Shift falls on a day the staff prefers off |
 | **Weekend avoidance** | + `weight × 0.6` | Shift is on Sat/Sun and staff has `avoidWeekends = true` |
@@ -605,6 +621,8 @@ Each component is multiplied by the weight for that component in the active vari
 | **Level 2 supervision** | − `weight × 0.6` | Candidate is Level 4+ on an ICU/ER shift that has a Level 2 nurse |
 | **Charge clustering** | + `weight × 0.5` | Non-charge-candidate is charge-qualified, but shift already has a charge nurse |
 
+**Capacity bonus rationale:** Mirrors natural charge-nurse behaviour — when two candidates are otherwise equal, the one with more remaining hours this week is asked first. The coefficient (0.1) is intentionally small so it acts as a tiebreaker only and does not override meaningful clinical penalties (skill mix, charge requirement, preferences). Float pool staff — who have no home-unit bias and often have lower accumulated hours when critical ICU shifts are scheduled first — benefit most from this bonus, naturally reducing overtime on regular unit staff later in the schedule.
+
 ---
 
 ### 12.5 Weight Profiles
@@ -613,14 +631,16 @@ Three profiles are defined. Weights are multiplied by the per-component penalty 
 
 | Weight | Balanced | Fairness-Optimized | Cost-Optimized |
 |--------|----------|--------------------|----------------|
-| `overtime` | 1.0 | 0.5 | **3.0** |
-| `preference` | 1.0 | **2.0** | 0.5 |
+| `overtime` | **1.5** | 0.5 | **3.0** |
+| `preference` | **1.5** | **2.0** | 0.5 |
 | `weekendCount` | 1.0 | **3.0** | 1.0 |
 | `consecutiveWeekends` | 1.0 | **3.0** | 1.0 |
 | `holidayFairness` | 1.0 | **3.0** | 1.0 |
 | `skillMix` | 1.0 | 1.0 | 0.5 |
 | `float` | 1.0 | 0.5 | **3.0** |
 | `chargeClustering` | 1.0 | 1.0 | 0.5 |
+
+**Balanced overtime rationale:** Raised from 1.0 → 1.5 so that actual overtime (a real payroll cost at 1.5× pay) is consistently more expensive than any single preference violation. At 1.5, 8h OT costs 1.0 scheduler units vs. a shift-type mismatch at 0.75 — overtime takes priority. The Fairness-Optimized profile intentionally keeps overtime low (0.5) because it accepts some extra hours in exchange for a more equitable weekend/holiday distribution.
 
 ---
 

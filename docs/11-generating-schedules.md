@@ -30,11 +30,13 @@ Every generation run produces three independent schedules, each optimised for a 
 
 | Variant | What it optimises for |
 |---|---|
-| **Balanced** | A reasonable mix of fairness, cost, and staff preferences. This is applied to the schedule automatically. |
-| **Fairness-Optimized** | Spreads weekend shifts, holidays, and preferred days off as evenly as possible across all staff. May use slightly more overtime to achieve this. |
+| **Balanced** | A reasonable mix of fairness, cost, and staff preferences. Overtime avoidance takes priority over preference matching. This is applied to the schedule automatically. |
+| **Fairness-Optimized** | Spreads weekend shifts, holidays, and preferred days off as evenly as possible across all staff. Accepts slightly more overtime in exchange for equitable distribution. |
 | **Cost-Optimized** | Minimises overtime and float assignments. Some staff may work shifts they prefer less if it avoids extra pay. |
 
 All three variants obey exactly the same hard rules — only their *preferences and trade-offs* differ.
+
+All variants also apply a **capacity-spreading preference**: when two staff members are otherwise equally suitable for a shift, the one who has worked fewer hours that week is preferred. This mirrors what a charge nurse naturally does when filling a gap ("who has the most availability this week?") and reduces the chance of one nurse accumulating overtime while another is underused.
 
 ### Applying an Alternative Variant
 
@@ -44,6 +46,8 @@ If you prefer the Fairness or Cost variant over the default Balanced one:
 2. Find the variant you want (labelled "Fair" or "Cost").
 3. Click **Apply**. This replaces the current assignments with the scenario's roster.
 4. The schedule page refreshes automatically.
+
+You can switch between variants at any time — including switching back to a variant you applied earlier and then moved away from. Every non-active scenario shows an **Apply** button, regardless of whether it was previously applied or rejected.
 
 ---
 
@@ -60,13 +64,13 @@ Shown in **red**. These represent situations that are unsafe or non-compliant �
 
 ### Soft Violations — Schedule Quality
 
-Shown in **yellow**. These are not rule breaches but indicate that the schedule is not ideal — for example, a nurse is working a shift type they prefer to avoid, or the weekend count is slightly uneven.
+Shown in **yellow**. These are not rule breaches but indicate that the schedule is not ideal — for example, a nurse is working a shift type they prefer to avoid, or someone has more weekend shifts than required.
 
 The soft violations panel shows two breakdowns:
 
 **By rule** — which optimisation rules fired and how many times. Common ones include:
 - *Preference Match* — staff assigned to a shift type, day, or weekend they prefer to avoid
-- *Weekend Fairness* — one staff member has significantly more weekend shifts than others
+- *Weekend Fairness* — a staff member has more weekend shifts than their required count
 - *Overtime* — a nurse's hours exceed their FTE target for the week
 
 **Affected staff** — every nurse who has at least one soft violation, sorted by how many they have. This tells you at a glance who is most impacted. For example:
@@ -80,6 +84,14 @@ Bob Jones      3 violations
 ```
 
 A small number of soft violations is normal and unavoidable — especially preference mismatches on ICU shifts where competency requirements limit which staff can work. If the count is high, consider regenerating with the Fairness-Optimized variant or manually swapping the most-affected staff members.
+
+### Viewing Violations for a Specific Shift
+
+Click any shift cell in the grid to open the violations detail panel for that shift. Violations are grouped into three sections:
+
+- **Hard Rule Violations (red)** — issues that must be resolved before the schedule is safe to publish, such as too few staff or a missing charge nurse.
+- **Soft Rule Violations (yellow)** — preference mismatches tied to this specific shift, such as a nurse assigned to a shift type they prefer to avoid.
+- **Staff Schedule Issues (orange)** — overtime or excess weekend violations for nurses assigned to this shift. These are flagged on the specific shift that crossed the threshold, so removing or swapping that one assignment clears the warning.
 
 ---
 

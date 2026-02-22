@@ -1,4 +1,4 @@
-import type { RuleEvaluator, RuleContext, RuleViolation } from "./types";
+import type { RuleEvaluator, RuleContext, RuleViolation, AssignmentInfo } from "./types";
 
 /**
  * Overtime Rules V2 (Soft)
@@ -36,8 +36,8 @@ export const overtimeRulesV2: RuleEvaluator = {
       return monday.toISOString().split("T")[0];
     };
 
-    // Build staff-week-hours map
-    const staffWeekHours = new Map<string, Map<string, number>>();
+    // Group assignments by staff → week → list (to be sorted chronologically)
+    const staffWeekAssignments = new Map<string, Map<string, AssignmentInfo[]>>();
 
     for (const a of context.assignments) {
       const shift = context.shiftMap.get(a.shiftId);
@@ -45,52 +45,70 @@ export const overtimeRulesV2: RuleEvaluator = {
       if (!shift?.countsTowardStaffing) continue;
 
       const weekStart = getWeekStart(a.date);
-      const staffWeeks = staffWeekHours.get(a.staffId) ?? new Map<string, number>();
-      const currentHours = staffWeeks.get(weekStart) ?? 0;
-      staffWeeks.set(weekStart, currentHours + a.durationHours);
-      staffWeekHours.set(a.staffId, staffWeeks);
+      const staffWeeks = staffWeekAssignments.get(a.staffId) ?? new Map<string, AssignmentInfo[]>();
+      const weekList = staffWeeks.get(weekStart) ?? [];
+      weekList.push(a);
+      staffWeeks.set(weekStart, weekList);
+      staffWeekAssignments.set(a.staffId, staffWeeks);
     }
 
-    // Check each staff member's weekly hours
-    for (const [staffId, weekHours] of staffWeekHours) {
+    // Walk through each staff member's week in chronological order.
+    // Emit a violation only on the specific shift that crosses a threshold —
+    // not on every shift the staff member works.
+    for (const [staffId, weekAssignmentsMap] of staffWeekAssignments) {
       const staffInfo = context.staffMap.get(staffId);
       if (!staffInfo) continue;
 
+      // Skip agency/PRN staff with no FTE commitment (fte = 0).
+      // They are scheduled on-demand and have no standard weekly hours to enforce.
+      if (staffInfo.fte === 0) continue;
+
       const staffName = `${staffInfo.firstName} ${staffInfo.lastName}`;
-      const standardHours = staffInfo.fte * 40; // Expected hours based on FTE
+      const standardHours = Math.min(staffInfo.fte * 40, 40); // cap at 40
 
-      for (const [weekStart, hours] of weekHours) {
-        // Case 1: Actual overtime (> 40 hours)
-        if (hours > 40) {
-          const overtimeHours = hours - 40;
-          // Normalize penalty: 12 hours OT = 1.0 penalty
-          const penaltyScore = (overtimeHours / 12) * actualOtPenaltyWeight;
+      for (const [weekStart, assignments] of weekAssignmentsMap) {
+        // Sort chronologically so we detect the exact crossing point
+        const sorted = [...assignments].sort((a, b) => a.date.localeCompare(b.date));
 
-          violations.push({
-            ruleId: "overtime-v2",
-            ruleName: "Overtime & Extra Hours",
-            ruleType: "soft",
-            shiftId: "",
-            staffId,
-            description: `${staffName} has ${hours} hours in week of ${weekStart}, ${overtimeHours.toFixed(1)} hours of actual overtime (>40h)`,
-            penaltyScore,
-          });
-        }
-        // Case 2: Extra hours but not overtime (> FTE*40 but <= 40)
-        else if (hours > standardHours && hours <= 40) {
-          const extraHours = hours - standardHours;
-          // Lower penalty for extra hours (shift premium vs OT rate)
-          const penaltyScore = (extraHours / 12) * extraHoursPenaltyWeight;
+        let cumulativeHours = 0;
+        let extraHoursFlagged = false;
+        let actualOtFlagged = false;
 
-          violations.push({
-            ruleId: "overtime-v2",
-            ruleName: "Overtime & Extra Hours",
-            ruleType: "soft",
-            shiftId: "",
-            staffId,
-            description: `${staffName} (${staffInfo.fte} FTE) has ${hours} hours in week of ${weekStart}, ${extraHours.toFixed(1)} hours above standard ${standardHours}h (but within 40h limit)`,
-            penaltyScore,
-          });
+        for (const a of sorted) {
+          cumulativeHours += a.durationHours;
+
+          // Case 1: This shift pushes past 40h → actual overtime
+          if (!actualOtFlagged && cumulativeHours > 40) {
+            const overtimeHours = cumulativeHours - 40;
+            const penaltyScore = (overtimeHours / 12) * actualOtPenaltyWeight;
+
+            violations.push({
+              ruleId: "overtime-v2",
+              ruleName: "Overtime & Extra Hours",
+              ruleType: "soft",
+              shiftId: a.shiftId,
+              staffId,
+              description: `${staffName} reaches ${cumulativeHours.toFixed(1)}h in week of ${weekStart} — this shift causes ${overtimeHours.toFixed(1)}h of actual overtime (>40h)`,
+              penaltyScore,
+            });
+            actualOtFlagged = true;
+          }
+          // Case 2: This shift pushes past standard hours (FTE×40) but stays ≤ 40h
+          else if (!extraHoursFlagged && standardHours < 40 && cumulativeHours > standardHours && cumulativeHours <= 40) {
+            const extraHours = cumulativeHours - standardHours;
+            const penaltyScore = (extraHours / 12) * extraHoursPenaltyWeight;
+
+            violations.push({
+              ruleId: "overtime-v2",
+              ruleName: "Overtime & Extra Hours",
+              ruleType: "soft",
+              shiftId: a.shiftId,
+              staffId,
+              description: `${staffName} (${staffInfo.fte} FTE, ${standardHours}h/week) reaches ${cumulativeHours.toFixed(1)}h in week of ${weekStart} — this shift adds ${extraHours.toFixed(1)}h above standard hours`,
+              penaltyScore,
+            });
+            extraHoursFlagged = true;
+          }
         }
       }
     }

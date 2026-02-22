@@ -5,7 +5,7 @@ import type { WeightProfile } from "./types";
  * Produces the best overall schedule by balancing all concerns.
  */
 export const BALANCED: WeightProfile = {
-  overtime: 1.0,
+  overtime: 1.5,     // raised from 1.0 — OT is a real payroll cost (1.5× pay) and should outweigh most single preference violations
   preference: 1.5,   // raised from 1.0 — prefer staff who want this shift type / day
   weekendCount: 1.0,
   consecutiveWeekends: 1.0,

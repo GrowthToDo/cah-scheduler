@@ -24,6 +24,18 @@ export async function POST(
   const { id: scheduleId } = await params;
   const body = await request.json();
 
+  // When assigning a new charge nurse, demote any existing charge assignments on
+  // the same shift. A shift should have at most one charge nurse; the new
+  // assignment supersedes any previous (possibly invalid) charge designation.
+  if (body.isChargeNurse) {
+    db.update(assignment)
+      .set({ isChargeNurse: false })
+      .where(
+        and(eq(assignment.shiftId, body.shiftId), eq(assignment.isChargeNurse, true))
+      )
+      .run();
+  }
+
   const newAssignment = db
     .insert(assignment)
     .values({

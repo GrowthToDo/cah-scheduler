@@ -6,6 +6,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.4] - 2026-02-22
+
+### Fixed
+
+- **Assignment dialog now correctly identifies when a shift still needs a charge nurse.** The previous condition checked whether *any* existing assignment had `isChargeNurse = true`, regardless of competency level. If a Level 3 nurse had been assigned as charge (violating the hard rule), the "Needs charge nurse" badge would disappear and the "Assign as Charge" button would never appear for valid Level 4+ candidates. The check now requires both `isChargeNurse = true` **and** `staffCompetency ≥ 4`, so the dialog accurately reflects that a valid charge nurse is still missing.
+
+- **"Assign as Charge" button gated to Level 4+ nurses.** Previously any `isChargeNurseQualified` nurse would show the "Assign as Charge" button even if their competency level was 1–3. The button is now only offered to nurses with `icuCompetencyLevel ≥ 4`, matching the hard rule requirement in §3.2.
+
+- **Assigning a new charge nurse now demotes the previous charge.** When a manager clicked "Assign as Charge" for a valid Level 4+ nurse, the API inserted the new assignment but left the previous invalid charge (e.g., a Level 3 nurse flagged as charge) in place. The shift then had two charge designations — an invalid one and a valid one — and the hard violation persisted despite the manager's action. The API now clears all existing `isChargeNurse = true` assignments on the same shift before inserting the new charge assignment, ensuring there is exactly one charge nurse and the violation resolves.
+
+### Files Modified
+
+- `src/components/schedule/assignment-dialog.tsx` — `needsCharge` condition now requires `staffCompetency >= 4`; "Assign as Charge" button now requires `icuCompetencyLevel >= 4`
+- `src/app/api/schedules/[id]/assignments/route.ts` — demotes existing charge assignments before inserting a new charge nurse
+
+---
+
+## [1.4.3] - 2026-02-22
+
+### Changed
+
+- **Balanced variant overtime weight raised from 1.0 to 1.5.** In the Balanced scheduler, actual overtime (>40h) was previously less expensive than some preference violations — for example, 8h of OT cost 0.667 units while a shift-type mismatch cost 0.75. This meant the scheduler would sometimes choose to put a nurse into overtime rather than assign an unwanted shift type to someone else. The new weight (1.5) makes 8h OT cost 1.0 units, consistently more expensive than any single preference violation, which reflects the real payroll cost of overtime pay (1.5× rate). The Fairness-Optimized variant intentionally keeps overtime low (0.5) to allow extra hours in exchange for equitable weekend and holiday distribution; that profile is unchanged.
+
+- **Capacity-spreading bonus added to the scheduling scoring function.** The greedy algorithm previously had no preference between two candidates with equal accumulated hours. This caused regular unit staff to be repeatedly selected for shifts until they approached overtime, while float pool staff — often fully cross-trained and at low hours — were left underutilised. A small capacity bonus (`−overtime_weight × 0.1 × remaining_hours_before_40h / 40`) now makes the algorithm prefer less-loaded staff when other factors are equal. At full remaining capacity (0h worked), the bonus is −0.15 in Balanced; at 24h already worked, it is −0.06. This gradient is intentionally small — it breaks ties without overriding clinical factors like charge requirement or competency level. Float pool staff naturally benefit most from this bonus early in the greedy pass (when they are typically at low hours and ICU shifts consume capacity), which reduces overtime accumulation on regular unit nurses later in the same week.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/weight-profiles.ts` — Balanced `overtime: 1.0 → 1.5`
+- `src/lib/engine/scheduler/scoring.ts` — capacity-spreading bonus added after overtime penalty block
+
+---
+
+## [1.4.2] - 2026-02-20
+
+### Fixed
+
+- **Overtime violations now flag the triggering shift, not all shifts.** Previously the overtime rule attached a staff-level violation (no shift ID), which made it invisible when clicking individual shifts in the grid and provided no guidance on which assignment to adjust. The rule now walks each staff member's assignments in chronological order, tracks cumulative hours for the week, and emits the violation only on the exact shift that pushes the running total past the threshold. All earlier shifts remain clean.
+
+- **Agency staff (FTE = 0) are no longer flagged for overtime.** Agency and on-demand staff have no weekly hours commitment — their FTE is recorded as 0. The previous logic derived a "standard hours" target of 0 × 40 = 0, which caused every shift worked to appear as an overtime violation. The fix exempts any staff member whose FTE is exactly 0 from the overtime rule entirely.
+
+- **Weekend rule now flags excess assignments, not shortfall.** The previous logic flagged staff who had *too few* weekend shifts. This was not actionable — there is no specific shift to remove when someone is short. The rule now flags each assignment that takes a staff member *beyond* their required weekend count, attaching the violation to that specific shift. Staff who meet or fall short of their target have no violation; the scheduler's cost function handles shortfall by preferring to assign those staff on weekends during construction.
+
+- **Soft violations are now visible when clicking shift cells.** Overtime and weekend violations both had an empty `shiftId` (staff-level), so they never appeared in the per-shift violations modal. The schedule page now builds a secondary map of staff-level violations and attaches them to every shift where that staff member is assigned. The violations modal displays three separate sections: hard rule violations (red), shift-specific soft violations (yellow, e.g. preference mismatch), and staff schedule issues (orange, e.g. overtime or excess weekends).
+
+- **Applying a scenario no longer permanently locks the other two.** After applying one scenario, the remaining scenarios were set to `rejected` status. The UI only showed the Apply button for `draft` scenarios, leaving rejected ones with no way to switch back. The condition is now `status !== "selected"` — any scenario that is not the currently active one shows an Apply button, and the Reject button is limited to `draft` scenarios only.
+
+- **ESLint CI check restored.** 29 linting errors were blocking the GitHub Actions check. Fixed by: auto-correcting 8 `prefer-const` violations, disabling the `react-hooks/set-state-in-effect` rule globally (the async fetch-then-setState pattern used in every page triggers a false positive), replacing three `no-explicit-any` casts with proper Drizzle-inferred types, and converting one `require()` call in the import route to an ESM `import`.
+
+### Files Modified
+
+- `src/lib/engine/rules/overtime-v2.ts` — shift-specific violations, FTE = 0 exemption
+- `src/lib/engine/rules/weekend-holiday-fairness.ts` — excess-flagging logic with shift IDs
+- `src/app/schedule/[id]/page.tsx` — staff violation map; attaches staff-level violations to shift cells
+- `src/components/schedule/shift-violations-modal.tsx` — three-section layout (hard / soft / staff)
+- `src/app/scenarios/page.tsx` — Apply button shown for all non-active scenarios
+- `eslint.config.mjs` — disable `react-hooks/set-state-in-effect`
+- `src/app/api/audit/route.ts` — typed Drizzle column references, removed `as any`
+- `src/app/audit/page.tsx` — typed `actionColors` map, removed `as any`
+- `src/app/api/import/route.ts` — ESM import for `xlsx`
+
+---
+
 ## [1.4.1] - 2026-02-20
 
 ### Fixed

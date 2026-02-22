@@ -8,7 +8,7 @@ This file provides context and conventions for Claude Code when working in this 
 
 **CAH Scheduler** is a nurse scheduling application for Critical Access Hospitals (small rural hospitals, ≤25 beds). It automates complex staff scheduling while enforcing hard rules (safety/legal) and soft rules (fairness/preferences).
 
-- **Current version:** 1.4.1
+- **Current version:** 1.4.4
 - **GitHub:** https://github.com/GrowthToDo/cah-scheduler
 - **Local path:** D:\Pradeep\Personal\Projects\Nurse-scheduling
 
@@ -226,6 +226,13 @@ Full specification: `RULES_SPECIFICATION.md`
 - `CHANGELOG.md` — Feature history and migration notes
 - `docs/01-introduction.md` through `docs/11-generating-schedules.md` — User-facing guides
 - `src/db/seed.ts` — Canonical example of test data structure
+
+---
+
+## Working Style Preferences
+
+- **Ground all suggestions in real-world nursing and hospital operations.** Before proposing any algorithm change, penalty weight, rule threshold, or workflow adjustment, reason through how it would play out in an actual hospital — consider payroll costs, staff fatigue, charge nurse responsibilities, and what a scheduling manager would naturally do. If a suggestion does not hold up to that test, revise it or flag the concern before implementing.
+- When multiple approaches are possible, discuss the practical trade-offs first and ask for direction before writing code.
 
 ---
 

@@ -46,7 +46,10 @@ export function ShiftViolationsModal({
   if (!shift) return null;
 
   const hardViolations = violations.filter((v) => v.ruleType === "hard");
-  const softViolations = violations.filter((v) => v.ruleType === "soft");
+  // Shift-level soft violations (preference match, etc.) — tied to this specific shift
+  const softViolations = violations.filter((v) => v.ruleType === "soft" && v.shiftId);
+  // Staff-level soft violations (overtime, weekend shortfall) — schedule-wide for assigned staff
+  const staffViolations = violations.filter((v) => v.ruleType === "soft" && !v.shiftId);
 
   const dateObj = parseISO(shift.date);
 
@@ -55,7 +58,7 @@ export function ShiftViolationsModal({
       <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <AlertTriangle className={`h-5 w-5 ${hardViolations.length > 0 ? "text-red-500" : "text-yellow-500"}`} />
             Shift Issues
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -121,8 +124,41 @@ export function ShiftViolationsModal({
             </div>
           )}
 
+          {/* Staff Schedule Violations (overtime, weekend shortfall, etc.) */}
+          {staffViolations.length > 0 && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <span className="font-medium text-orange-800">
+                  Staff Schedule Issues ({staffViolations.length})
+                </span>
+                <Badge variant="outline" className="ml-auto border-orange-600 text-orange-700">
+                  Schedule-wide
+                </Badge>
+              </div>
+              <p className="mb-2 text-xs text-orange-700">
+                These apply to assigned staff across the full schedule, not just this shift.
+              </p>
+              <ul className="space-y-2">
+                {staffViolations.map((v, idx) => (
+                  <li key={idx} className="rounded bg-white p-2 text-sm shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-orange-900">{v.ruleName}</span>
+                      {v.penaltyScore !== undefined && (
+                        <Badge variant="secondary" className="text-xs">
+                          -{v.penaltyScore.toFixed(1)} pts
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-orange-700">{v.description}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* No violations */}
-          {hardViolations.length === 0 && softViolations.length === 0 && (
+          {hardViolations.length === 0 && softViolations.length === 0 && staffViolations.length === 0 && (
             <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
               <span className="text-green-800">No issues found for this shift.</span>
             </div>
