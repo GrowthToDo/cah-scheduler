@@ -78,6 +78,11 @@ export async function GET(
     .map((s) => {
       const eligible = passesHardRules(s, shiftInfo, state, context);
       const ineligibleReasons = eligible ? [] : getRejectionReasons(s, shiftInfo, state, context);
+
+      const weeklyHours = state.getWeeklyHours(s.id, shiftInfo.date);
+      const standardWeeklyHours = Math.round(Math.min(s.fte * 40, 40) * 10) / 10;
+      const wouldCauseOT = weeklyHours + shiftInfo.durationHours > 40;
+
       return {
         id: s.id,
         firstName: s.firstName,
@@ -90,6 +95,13 @@ export async function GET(
         isActive: s.isActive,
         eligible,
         ineligibleReasons,
+        // Scheduling context — helps manager make an informed assignment decision
+        weeklyHours,
+        standardWeeklyHours,
+        wouldCauseOT,
+        preferredShift: s.preferences?.preferredShift ?? null,
+        preferredDaysOff: s.preferences?.preferredDaysOff ?? [],
+        avoidWeekends: s.preferences?.avoidWeekends ?? false,
       };
     });
 

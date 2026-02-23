@@ -47,6 +47,12 @@ interface StaffOption {
   isActive: boolean;
   eligible: boolean;
   ineligibleReasons: string[];
+  weeklyHours: number;
+  standardWeeklyHours: number;
+  wouldCauseOT: boolean;
+  preferredShift: string | null;
+  preferredDaysOff: string[];
+  avoidWeekends: boolean;
 }
 
 export function AssignmentDialog({
@@ -218,49 +224,88 @@ export function AssignmentDialog({
                     </p>
                   ) : (
                     <div className="space-y-1">
-                      {eligible.map((s) => (
-                        <div
-                          key={s.id}
-                          className="flex items-center justify-between rounded-md border px-3 py-2"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {s.firstName} {s.lastName}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {s.role}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {employmentLabels[s.employmentType] || s.employmentType}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Level {s.icuCompetencyLevel}/5
-                            </span>
-                            {s.isChargeNurseQualified && (
-                              <Badge variant="outline" className="text-xs">
-                                Charge RN
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex gap-1">
-                            {s.isChargeNurseQualified && s.icuCompetencyLevel >= 4 && needsCharge && (
+                      {eligible.map((s) => {
+                        // Build detail hints for the second line
+                        const shiftDayName = format(parseISO(shift.date), "EEEE");
+                        const isWeekend = [0, 6].includes(parseISO(shift.date).getDay());
+                        const prefMismatch =
+                          s.preferredShift && s.preferredShift !== "any" && s.preferredShift !== shift.shiftType
+                            ? `Prefers ${s.preferredShift}`
+                            : null;
+                        const dayOffMismatch =
+                          s.preferredDaysOff.includes(shiftDayName) ? `Prefers ${shiftDayName} off` : null;
+                        const weekendMismatch = isWeekend && s.avoidWeekends ? "Avoids weekends" : null;
+
+                        const aboveFTE =
+                          s.standardWeeklyHours < 40 && s.weeklyHours >= s.standardWeeklyHours;
+
+                        return (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between rounded-md border px-3 py-2"
+                          >
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium">
+                                  {s.firstName} {s.lastName}
+                                </span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {s.role}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {employmentLabels[s.employmentType] || s.employmentType}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  Level {s.icuCompetencyLevel}/5
+                                </span>
+                                {s.isChargeNurseQualified && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Charge RN
+                                  </Badge>
+                                )}
+                              </div>
+                              {/* Detail line */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-xs ${aboveFTE ? "text-amber-600" : "text-muted-foreground"}`}>
+                                  {s.weeklyHours}h this week
+                                  {s.standardWeeklyHours < 40 && ` (${s.standardWeeklyHours}h FTE target)`}
+                                </span>
+                                {s.wouldCauseOT && (
+                                  <Badge variant="destructive" className="text-xs py-0">
+                                    Would OT
+                                  </Badge>
+                                )}
+                                {prefMismatch && (
+                                  <span className="text-xs text-amber-600">{prefMismatch}</span>
+                                )}
+                                {dayOffMismatch && (
+                                  <span className="text-xs text-amber-600">{dayOffMismatch}</span>
+                                )}
+                                {weekendMismatch && (
+                                  <span className="text-xs text-amber-600">{weekendMismatch}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-1 shrink-0 ml-2">
+                              {s.isChargeNurseQualified && s.icuCompetencyLevel >= 4 && needsCharge && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => onAssign(shift.id, s.id, true)}
+                                >
+                                  Assign as Charge
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
-                                onClick={() => onAssign(shift.id, s.id, true)}
+                                variant="outline"
+                                onClick={() => onAssign(shift.id, s.id, false)}
                               >
-                                Assign as Charge
+                                Assign
                               </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => onAssign(shift.id, s.id, false)}
-                            >
-                              Assign
-                            </Button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
