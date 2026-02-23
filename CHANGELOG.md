@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.13] - 2026-02-23
+
+### Fixed
+
+- **OT badge now appears on all overtime shifts, not just the one that first crossed 40 hours.**
+
+  Previously, the `isOvertime` flag on each assignment was set during greedy construction in the order shifts were processed — most-constrained first. Weekend shifts (Saturday, Sunday) are harder to fill and therefore processed *before* the weekday shifts in the same week. As a result, a nurse's Saturday and Sunday assignments were built when the state only showed their hours from earlier in the construction run, not their full calendar-week total. The weekday shift that was processed last (say, Thursday) accumulated the construction-order total and triggered `isOvertime: true`, while Saturday and Sunday remained `false` — even though they sit *after* Thursday on the calendar and are therefore also overtime hours.
+
+  **Fix:** A `recomputeOvertimeFlags` post-processing pass now runs after all three phases (greedy + repair + local search) complete. It sorts every draft by date/startTime (calendar order), accumulates weekly hours per staff member, and re-marks `isOvertime = true` on every shift where the running total exceeds 40 hours — not just the construction-order trigger. The OT badge in the schedule grid and the assignment dialog now correctly appear on *all* overtime shifts in the week.
+
+- **Manual assignments now also compute `isOvertime` correctly.** Previously, `handleAssign` in the schedule page did not pass `isOvertime` to the API, so every manually-created assignment was stored with `isOvertime: false` regardless of the nurse's actual weekly hours. The assignment creation API now computes `isOvertime` server-side: it sums the staff member's existing assignments in the same calendar week (via a join through `shiftDefinition` to get `durationHours`) and sets the flag accurately before inserting the new record.
+
+### Files Modified
+
+- `src/lib/engine/scheduler/index.ts` — `AssignmentDraft` and `getWeekStart` imported; `recomputeOvertimeFlags` helper added; called after `localSearch` in `generateSchedule`
+- `src/app/api/schedules/[id]/assignments/route.ts` — `shiftDefinition`, `gte`, `lte`, `getWeekStart` imported; shift lookup moved to top of handler; `isOvertime` computed from weekly hours sum before insert; duplicate `shiftRecord` fetch removed
+
+---
+
 ## [1.4.12] - 2026-02-23
 
 ### Changed

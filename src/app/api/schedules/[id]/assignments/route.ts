@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { assignment, shift, publicHoliday, staffHolidayAssignment } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { assignment, shift, shiftDefinition, publicHoliday, staffHolidayAssignment } from "@/db/schema";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { logAuditEvent } from "@/lib/audit/logger";
+import { getWeekStart } from "@/lib/engine/scheduler/state";
 
 /**
  * Holiday groups - maps individual holiday names to logical holiday groups.
@@ -24,6 +25,46 @@ export async function POST(
   const { id: scheduleId } = await params;
   const body = await request.json();
 
+  // Look up the shift up front — needed to compute isOvertime and for holiday tracking below
+  const shiftRecord = db.select().from(shift).where(eq(shift.id, body.shiftId)).get();
+
+  // Compute isOvertime: sum hours already assigned to this staff member in the same
+  // calendar week, then check if adding this shift would push them over 40h.
+  // The client never sends a reliable isOvertime value (it doesn't track weekly state),
+  // so we always compute it here from the current DB state.
+  // durationHours lives on shiftDefinition, so queries join through that table.
+  let isOvertime = false;
+  if (shiftRecord) {
+    const shiftDef = db
+      .select({ durationHours: shiftDefinition.durationHours })
+      .from(shiftDefinition)
+      .where(eq(shiftDefinition.id, shiftRecord.shiftDefinitionId))
+      .get();
+    const shiftDuration = shiftDef?.durationHours ?? 0;
+
+    const weekStart = getWeekStart(shiftRecord.date);
+    const weekEndDate = new Date(weekStart);
+    weekEndDate.setDate(weekEndDate.getDate() + 6);
+    const weekEnd = weekEndDate.toISOString().slice(0, 10);
+
+    const existingRows = db
+      .select({ durationHours: shiftDefinition.durationHours })
+      .from(assignment)
+      .innerJoin(shift, eq(assignment.shiftId, shift.id))
+      .innerJoin(shiftDefinition, eq(shift.shiftDefinitionId, shiftDefinition.id))
+      .where(
+        and(
+          eq(assignment.staffId, body.staffId),
+          gte(shift.date, weekStart),
+          lte(shift.date, weekEnd)
+        )
+      )
+      .all();
+
+    const weeklyHours = existingRows.reduce((sum, r) => sum + r.durationHours, 0);
+    isOvertime = weeklyHours + shiftDuration > 40;
+  }
+
   // When assigning a new charge nurse, demote any existing charge assignments on
   // the same shift. A shift should have at most one charge nurse; the new
   // assignment supersedes any previous (possibly invalid) charge designation.
@@ -43,7 +84,7 @@ export async function POST(
       staffId: body.staffId,
       scheduleId,
       isChargeNurse: body.isChargeNurse ?? false,
-      isOvertime: body.isOvertime ?? false,
+      isOvertime,
       assignmentSource: body.assignmentSource ?? "manual",
       safeHarborInvoked: body.safeHarborInvoked ?? false,
       safeHarborFormId: body.safeHarborFormId || null,
@@ -63,8 +104,7 @@ export async function POST(
     newState: newAssignment as unknown as Record<string, unknown>,
   });
 
-  // Track holiday assignment for annual fairness
-  const shiftRecord = db.select().from(shift).where(eq(shift.id, body.shiftId)).get();
+  // Track holiday assignment for annual fairness — shiftRecord already fetched above
   if (shiftRecord) {
     const holidayRecord = db
       .select()
