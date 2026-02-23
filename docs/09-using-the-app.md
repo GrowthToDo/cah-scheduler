@@ -168,10 +168,24 @@ Required information:
 |------|--------|
 | View a day's coverage | Click on the day |
 | See who's working a shift | Click on the shift |
-| Add an assignment | Click empty slot, select staff |
-| Remove an assignment | Click assignment, select "Remove" |
+| Add an assignment | Click any shift to open the assignment dialog |
+| Remove an assignment | Open the shift dialog, click "Remove" next to the staff member |
 | **Generate schedule automatically** | Click **"Generate Schedule"** button in the top-right |
 | Publish schedule | Click "Publish" button |
+
+### The Assignment Dialog
+
+When you click any shift in the grid, a dialog opens showing:
+
+- **Currently Assigned** — everyone on this shift, with badges for Charge, OT, and competency level
+- **Available Staff** — all staff who pass hard scheduling rules for this shift, each showing:
+  - Hours already worked this week — helps you pick someone with capacity
+  - FTE target for part-time staff (shown in amber if they're already above it)
+  - **Would OT** badge (red) — assigning this person would cross 40 h/week
+  - Preference mismatches in amber — "Prefers evenings", "Prefers Monday off", "Avoids weekends"
+- **Unavailable** — staff blocked by a hard rule, with the reason shown (e.g., "insufficient rest", "on approved leave")
+
+If a shift requires a charge nurse, eligible charge nurses (Level 4+) show an **Assign as Charge** button instead of the plain Assign button.
 
 ### Schedule Workflow
 

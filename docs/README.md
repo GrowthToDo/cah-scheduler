@@ -69,9 +69,11 @@ This application helps nurse managers create fair, compliant, and cost-effective
 
 - **Auto-generate schedules** — Click "Generate Schedule" on any schedule and the system builds a full roster from scratch in seconds. Three variants are produced automatically: Balanced, Fairness-Optimized, and Cost-Optimized.
 - **Hard rule enforcement** — Constraints like rest hours, 60-hour weekly limits, competency requirements, and approved leave are *never* violated. If a shift can't be filled, it is flagged as understaffed rather than silently breaking a rule.
+- **Automatic hard-violation repair** — After the initial schedule is built, a repair pass automatically resolves remaining hard violations (missing charge nurse, missing Level 4+ ICU supervisor, understaffed slots) using direct assignment and staff-swap strategies. Only genuine staffing shortages reach the manager.
 - **Charge nurse rules** — Only Level 5 nurses (or Level 4 as a stand-in when no Level 5 is available) can be assigned as charge nurse. A Level 2 or Level 3 nurse cannot hold a charge role regardless of how their record is configured.
 - **Violations dashboard** — After generating or editing a schedule, the page shows a full breakdown of hard violations (must fix) and soft violations (schedule quality), with a per-staff view so you know exactly who is affected and why.
 - **Scenario comparison** — The two alternative variants are saved as scenarios you can review and apply at any time without regenerating.
+- **Informed manual assignment** — The assignment dialog shows each eligible nurse's current weekly hours, FTE target, whether assigning them would cause overtime, and any preference mismatches — so you can make the right call when adjusting a shift manually.
 
 ---
 
@@ -82,4 +84,4 @@ This application helps nurse managers create fair, compliant, and cost-effective
 
 ---
 
-*Last Updated: February 2026 — v1.4.5 (auto-generation, charge nurse competency, three-section violations modal, overtime/weekend rule improvements, scenario switching fix, scheduling penalty re-calibration, charge nurse assignment dialog fixes, charge protection look-ahead, PRN availability improvements)*
+*Last Updated: February 2026 — v1.4.11 (auto-generation, charge nurse rules, violations modal, overtime/weekend rule improvements, scenario switching, penalty calibration, charge protection look-ahead, PRN availability, automatic hard-violation repair, non-OT scheduling preference, marginal extra-hours display, local search safety guards, assignment dialog context indicators)*
