@@ -59,14 +59,24 @@ export async function PUT(
   // POST /api/callouts already sets this when the callout is first logged, but
   // setting it again here is defensive — covers leave-based or direct-API flows
   // where the original assignment status may not have been updated yet.
+  // Also read isChargeNurse before the update so we can inherit it for the replacement.
+  let originalWasCharge = false;
   if (updated.assignmentId) {
+    const orig = db.select({ isChargeNurse: assignment.isChargeNurse })
+      .from(assignment)
+      .where(eq(assignment.id, updated.assignmentId))
+      .get();
+    originalWasCharge = orig?.isChargeNurse === true;
+
     db.update(assignment)
       .set({ status: "called_out", updatedAt: new Date().toISOString() })
       .where(eq(assignment.id, updated.assignmentId))
       .run();
   }
 
-  // Create a replacement assignment so the grid shows the new nurse
+  // Create a replacement assignment so the grid shows the new nurse.
+  // If the called-out nurse held the charge role, inherit it for the replacement
+  // so the shift doesn't immediately gain a "Charge Nurse Required" hard violation.
   if (body.replacementStaffId && updated.shiftId) {
     const shiftRecord = db
       .select({ scheduleId: shift.scheduleId })
@@ -100,7 +110,7 @@ export async function PUT(
           assignmentSource: "callout_replacement",
           isFloat,
           floatFromUnit: isFloat ? staffHomeUnit : null,
-          isChargeNurse: false,
+          isChargeNurse: originalWasCharge,
           isOvertime: body.replacementSource === "overtime",
         })
         .run();

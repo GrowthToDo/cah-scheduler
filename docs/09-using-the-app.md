@@ -396,31 +396,47 @@ If you closed the replacement dialog (for example, to check the schedule grid fo
 
 ## Shift Swaps (`/swaps`)
 
-**Purpose:** Manage shift trade requests between staff.
+**Purpose:** Log and manage shift trade requests between staff.
 
 ### What You'll See
 
-- **Swap List** - All swap requests
-- **Parties** - Who wants to swap with whom
-- **Shifts** - Which shifts are being traded
-- **Status** - Pending, Approved, Denied
+- **Swap List** - All swap requests, showing requesting staff, their shift date, target staff, target shift date, status, and notes
+- **Status Badges** - Pending, Approved, Denied
+- **Pending count** badge on the Pending filter button
 
 ### Common Tasks
 
 | Task | How To |
 |------|--------|
-| See pending swaps | Click "Pending" filter |
-| Approve a swap | Click "Approve" |
+| Log a new swap request | Click **"Log Swap Request"** (top-right) |
+| See requests awaiting action | Click "Pending" filter |
+| Approve a directed swap | Click "Approve" — system validates hard rules automatically |
 | Deny a swap | Click "Deny" |
 
-### Before Approving
+### Logging a Swap Request
 
-The system should validate:
-- Both parties are qualified for each other's shifts
-- No rule violations created
-- Coverage remains adequate
+1. Click **"Log Swap Request"**
+2. Under **Requesting Staff**: pick a staff member, then choose one of their upcoming assignments as the shift they want to give up
+3. Under **Target Staff** (optional): pick another staff member and their shift for a directed swap — or leave blank to create an open request
+4. Add optional notes, then click **Submit Request**
 
-Review these checks before approving!
+### Approving a Directed Swap
+
+When you click **Approve**, the system automatically checks five hard rules before making any changes:
+
+- **ICU competency** — both incoming staff must be Level 2 or above
+- **Charge nurse** — if the assignment carries the charge role, the incoming staff must be Level 4+
+- **Level 2 supervision** — a Level 2 nurse requires a Level 4+ coworker to remain on the shift
+- **Leave conflict** — incoming staff cannot have approved leave on the new shift date
+- **Shift overlap** — incoming staff cannot already be assigned to a conflicting shift that day
+
+If any rule is violated, a **"Swap Cannot Be Approved"** dialog appears listing each issue. The swap is **not** performed — the request stays Pending so you can deny it or investigate further.
+
+### Approving an Open Swap Request
+
+If no target staff was selected, approving the request:
+1. Hides the requesting staff member's original assignment from the schedule grid
+2. Automatically creates a **Coverage Request** for that shift — it appears on the Coverage page (`/open-shifts`) where you can use the normal escalation workflow to find a replacement
 
 ---
 
@@ -589,6 +605,20 @@ Review these checks before approving!
    - Consider other requests same period
    - Approve or Deny
    - Add notes if denying
+```
+
+### Handling a Swap Request
+
+```
+1. Go to Swaps page
+2. Click "Log Swap Request"
+3. Select requesting staff + shift they want to give up
+4. Select target staff + their shift (leave blank for open swap)
+5. Click Submit — request appears as Pending
+6. Click "Approve" to validate and perform the swap
+   - If hard rules violated → dialog lists issues, swap blocked
+   - If clean → assignments are swapped automatically
+   - If open swap → Coverage Request created on Coverage page
 ```
 
 ---

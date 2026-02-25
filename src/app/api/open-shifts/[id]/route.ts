@@ -82,6 +82,16 @@ export async function PUT(
       return NextResponse.json(updated);
     }
 
+    // Check if the original nurse was the charge nurse so the replacement inherits the role.
+    // Without this, every coverage approval for a charge nurse creates a hard "Charge Nurse Required" violation.
+    const originalAssignment = existing.originalStaffId
+      ? db.select({ isChargeNurse: assignment.isChargeNurse })
+          .from(assignment)
+          .where(and(eq(assignment.staffId, existing.originalStaffId), eq(assignment.shiftId, existing.shiftId)))
+          .get()
+      : null;
+    const inheritChargeRole = originalAssignment?.isChargeNurse === true;
+
     // Create new assignment for the approved staff
     const newAssignment = db
       .insert(assignment)
@@ -89,7 +99,7 @@ export async function PUT(
         shiftId: existing.shiftId,
         staffId: body.selectedStaffId,
         scheduleId: shiftRecord.scheduleId,
-        isChargeNurse: body.isChargeNurse ?? false,
+        isChargeNurse: inheritChargeRole,
         isOvertime: isOvertime,
         assignmentSource: source === "float" ? "float" : source === "overtime" ? "manual" : "callout_replacement",
         notes: `Auto-filled from coverage request (original: ${existing.originalStaffId}, source: ${source})`,
@@ -151,6 +161,15 @@ export async function PUT(
       return NextResponse.json({ error: "Shift not found" }, { status: 404 });
     }
 
+    // Inherit charge role from original assignment (same reason as approve action above)
+    const originalAssignmentFill = existing.originalStaffId
+      ? db.select({ isChargeNurse: assignment.isChargeNurse })
+          .from(assignment)
+          .where(and(eq(assignment.staffId, existing.originalStaffId), eq(assignment.shiftId, existing.shiftId)))
+          .get()
+      : null;
+    const inheritChargeRoleFill = originalAssignmentFill?.isChargeNurse === true;
+
     // Create new assignment for the staff filling the shift
     const newAssignment = db
       .insert(assignment)
@@ -158,7 +177,7 @@ export async function PUT(
         shiftId: existing.shiftId,
         staffId: body.filledByStaffId,
         scheduleId: shiftRecord.scheduleId,
-        isChargeNurse: body.isChargeNurse ?? false,
+        isChargeNurse: inheritChargeRoleFill,
         isOvertime: body.isOvertime ?? false,
         assignmentSource: "manual",
         notes: `Manually filled from coverage request (original: ${existing.originalStaffId})`,

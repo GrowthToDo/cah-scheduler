@@ -13,7 +13,7 @@ import {
   publicHoliday,
   schedule,
 } from "@/db/schema";
-import { eq, and, gte, lte, lt } from "drizzle-orm";
+import { eq, and, gte, lte, lt, ne } from "drizzle-orm";
 import { getEvaluator } from "./rules";
 import type {
   RuleContext,
@@ -63,7 +63,9 @@ export function buildContext(scheduleId: string): RuleContext {
       }
     : null;
 
-  // Fetch all assignments for this schedule
+  // Fetch all active assignments for this schedule.
+  // Exclude called_out and cancelled — those staff are not working the shift and
+  // should not trigger leave-conflict, rest-hours, or any other rule violation.
   const assignments = db
     .select({
       id: assignment.id,
@@ -78,7 +80,13 @@ export function buildContext(scheduleId: string): RuleContext {
     })
     .from(assignment)
     .innerJoin(shift, eq(assignment.shiftId, shift.id))
-    .where(eq(assignment.scheduleId, scheduleId))
+    .where(
+      and(
+        eq(assignment.scheduleId, scheduleId),
+        ne(assignment.status, "called_out"),
+        ne(assignment.status, "cancelled")
+      )
+    )
     .all();
 
   // Fetch shift definitions

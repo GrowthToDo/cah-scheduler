@@ -61,6 +61,7 @@ interface ReplacementCandidate {
   reasons: string[];
   score: number;
   hoursThisWeek: number;
+  restHoursBefore?: number;
 }
 
 interface ScheduleInfo {
@@ -486,6 +487,20 @@ export default function CalloutsPage() {
                           </li>
                         ))}
                       </ul>
+                    )}
+
+                    {/* Rest hours before shift */}
+                    {c.isEligible && (
+                      <p className={`mt-1 pl-1 text-xs ${
+                        c.restHoursBefore !== undefined && c.restHoursBefore < 12
+                          ? "text-amber-600"
+                          : "text-muted-foreground"
+                      }`}>
+                        · Rest before shift:{" "}
+                        {c.restHoursBefore !== undefined
+                          ? `${Math.round(c.restHoursBefore)}h${c.restHoursBefore < 12 ? " — short turnaround" : ""}`
+                          : "24h+"}
+                      </p>
                     )}
 
                     {/* Ineligibility reasons */}

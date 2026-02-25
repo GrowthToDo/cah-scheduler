@@ -158,37 +158,44 @@ A shift swap is when two staff members trade shifts with each other.
 ### The Swap Request Workflow
 
 ```
-Staff A Requests Swap
+Manager logs swap request (Log Swap Request button)
         ↓
-Specifies: "I want to give up Shift X"
-           "I want to take Shift Y from Staff B"
+Specifies: Requesting staff + their shift
+           Target staff + their shift (optional)
         ↓
    Request is "Pending"
         ↓
-Manager Reviews
-   - Is the swap safe?
-   - Do both parties agree?
-   - Any rule violations?
+Manager Reviews → clicks "Approve"
         ↓
-   ┌────┴────┐
-   ↓         ↓
-Approved   Denied
-   ↓         ↓
-Shifts     Nothing
-swapped    changes
+System automatically checks hard rules:
+   - ICU competency level ≥ 2 for each incoming staff member
+   - Charge nurse role: incoming staff must be Level 4+
+   - Level 2 supervision: must have Level 4+ coworker remaining
+   - No approved leave on the new shift date
+   - No overlapping shift already scheduled
+        ↓
+   ┌─────────┴──────────┐
+   ↓                    ↓
+Rules pass          Rules violated
+   ↓                    ↓
+Shifts swapped      "Swap Cannot Be Approved"
+automatically       dialog lists each issue —
+                    swap is NOT performed
 ```
 
-### What Does the Manager Check?
+### What Does the System Check Automatically?
 
-Before approving a swap, the manager verifies:
+When you click "Approve" on a directed swap, the system validates these hard rules **before** making any changes:
 
-| Check | Question |
-|-------|----------|
-| **Coverage** | Will both shifts still be properly staffed? |
-| **Qualifications** | Can each person actually work the other's shift? |
-| **Rest Time** | Will the swap create a rest violation? |
-| **Overtime** | Will the swap push someone into overtime? |
-| **Supervision** | Will proper supervision still be present? |
+| Check | What It Catches |
+|-------|-----------------|
+| **ICU competency** | Incoming staff is Level 1 (below ICU minimum of 2) |
+| **Charge nurse** | Incoming staff is Level <4 but the slot carries the charge role |
+| **Level 2 supervision** | Incoming staff is Level 2 with no Level 4+ coworker remaining on that shift |
+| **Approved leave** | Incoming staff has approved leave on the date of their new shift |
+| **Shift overlap** | Incoming staff is already assigned to another shift that overlaps |
+
+If any check fails, a dialog appears listing every violation. The swap is **not** performed and the request stays Pending so you can investigate and either deny it or correct the issue.
 
 ### Example: Valid Swap
 
@@ -202,27 +209,35 @@ Before approving a swap, the manager verifies:
 > - Tuesday Day: Lisa (RN, Level 4), John (RN, Level 3), others...
 > - Thursday Day: Maria (RN, Level 4), Tom (RN, Level 3), others...
 >
-> **Result:** Both shifts still have a Level 4 nurse. Approved!
+> **Result:** Both shifts still have a Level 4 nurse. System approves automatically!
 
-### Example: Invalid Swap
+### Example: Invalid Swap (Blocked)
 
 > **Before:**
-> - Tuesday Day: Maria (RN, Level 5, Charge), others...
-> - Thursday Day: John (RN, Level 3), others...
+> - Tuesday Day: Maria (RN, Level 5, Charge), John (RN, Level 2), others...
+> - Thursday Day: Sam (RN, Level 3), others...
 >
-> **Swap Request:** Maria ↔ John
+> **Swap Request:** Maria ↔ Sam
 >
-> **Problem:** Tuesday Day would have no charge-qualified nurse!
+> **What happens when you click Approve:**
+> - System detects: Sam is Level 3 — charge nurse role requires Level 4+
+> - System detects: John is Level 2 and would be left with no Level 4+ supervisor
+> - "Swap Cannot Be Approved" dialog appears with both violations listed
+> - Assignments are **unchanged**
 >
-> **Result:** Denied - violates Charge Nurse requirement.
+> **Resolution:** Deny the request and explain why, or find a different swap partner.
 
 ### Open Requests
 
-Sometimes staff submit a swap request without a specific trade partner:
+Sometimes staff cannot find a specific trade partner:
 
-> "I need to give up my Tuesday shift. Anyone want it?"
+> "I need to give up my Tuesday shift. Can someone else cover it?"
 
-This creates an "open request" that any qualified staff can pick up.
+Log this as an **open swap request** (leave Target Staff blank). When you approve an open swap:
+
+1. The requesting staff member's assignment is marked as unavailable (hidden from the grid)
+2. A **Coverage Request** is automatically created for that shift — it appears on the Coverage page exactly like a leave or callout replacement request
+3. Use the Coverage page to find a replacement through the normal escalation workflow
 
 ---
 
@@ -308,15 +323,17 @@ Managers can see:
 ### Shift Swaps Page (`/swaps`)
 
 **What you see:**
-- List of all swap requests
-- Who wants to swap with whom
-- Which shifts are involved
-- Status of each request
+- List of all swap requests with requesting staff, their shift, target staff, and target shift
+- Status of each request (Pending, Approved, Denied)
 
 **What you can do:**
-- **Approve** pending swaps
-- **Deny** pending swaps
-- Filter by status
+- **Log Swap Request** — click the button in the top-right to open the creation dialog:
+  1. Select the requesting staff member and the shift they want to give up
+  2. Optionally select target staff and their shift (leave blank for an open request)
+  3. Add optional notes and click **Submit Request**
+- **Approve** pending swaps — system validates hard rules automatically; shows a violation dialog if any rule fails
+- **Deny** pending swaps — request stays on file with Denied status
+- Filter by status (All / Pending / Approved / Denied)
 
 ### PRN Availability Page (`/availability`)
 

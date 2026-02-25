@@ -23,9 +23,10 @@ export interface ReplacementCandidate {
   wouldBeOvertime: boolean;
   isEligible: boolean;
   ineligibilityReasons: string[];
-  reasons: string[];      // why this person is a good recommendation
-  score: number;          // numeric rank (higher = better)
-  hoursThisWeek: number;  // hours already scheduled in the shift's calendar week
+  reasons: string[];          // why this person is a good recommendation
+  score: number;              // numeric rank (higher = better)
+  hoursThisWeek: number;      // hours already scheduled in the shift's calendar week
+  restHoursBefore?: number;   // hours of rest between candidate's last preceding shift and this one
 }
 
 function timeToMins(time: string): number {
@@ -189,13 +190,12 @@ export function getEscalationOptions(
 
     // ── Eligibility checks ─────────────────────────────────────────────────
 
-    // Role compatibility
+    // Role compatibility — hard exclusion, not just ineligibility.
+    // A CNA/LPN cannot perform RN duties regardless of circumstances; showing
+    // them in any candidate list (even "ineligible") creates confusion for the
+    // manager. Skip entirely rather than surfacing an unworkable option.
     const candidateRoleRank = ROLE_RANK[s.role] ?? 0;
-    if (candidateRoleRank < calledOutRoleRank) {
-      ineligibilityReasons.push(
-        `${s.role} cannot cover a ${calledOut?.role ?? "unknown"} position`
-      );
-    }
+    if (candidateRoleRank < calledOutRoleRank) continue;
 
     // Charge nurse requirement
     if (chargeNurseRequired && !s.isChargeNurseQualified) {
@@ -213,16 +213,24 @@ export function getEscalationOptions(
     const staffNearby = nearbyByStaff.get(s.id) ?? [];
     const isAvailable = !staffNearby.some((a) => a.date === shiftDate);
 
-    // Adjacent-day rest (10 h minimum)
+    // Adjacent-day rest (10 h minimum) + compute rest hours for display
+    let restHoursBefore: number | undefined;
     if (isAvailable) {
       for (const a of staffNearby) {
-        if (a.date === prevDate && a.endTime <= a.startTime) {
-          // Overnight shift from D-1 ends on D — check rest before this shift
-          const restMins = shiftStartMins - timeToMins(a.endTime);
-          if (restMins < 10 * 60) {
+        if (a.date === prevDate) {
+          // Compute the gap from this D-1 assignment's end to the new shift start
+          const aEndMins = timeToMins(a.endTime);
+          const gap = a.endTime <= a.startTime
+            ? shiftStartMins - aEndMins              // overnight D-1 shift ends on D
+            : 24 * 60 - aEndMins + shiftStartMins;  // day shift ends on D-1
+          if (gap < 10 * 60) {
             ineligibilityReasons.push(
-              `Only ${Math.round(restMins / 60)}h rest before this shift`
+              `Only ${Math.round(gap / 60)}h rest before this shift`
             );
+          }
+          // Track minimum rest for display on eligible candidates
+          if (restHoursBefore === undefined || gap / 60 < restHoursBefore) {
+            restHoursBefore = gap / 60;
           }
         }
         if (a.date === nextDate) {
@@ -350,6 +358,7 @@ export function getEscalationOptions(
       reasons,
       score,
       hoursThisWeek,
+      restHoursBefore,
     });
   }
 

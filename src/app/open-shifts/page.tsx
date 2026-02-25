@@ -24,11 +24,14 @@ import { format, parseISO } from "date-fns";
 interface CandidateRecommendation {
   staffId: string;
   staffName: string;
+  role?: string;
+  icuCompetencyLevel?: number;
   source: "float" | "per_diem" | "overtime" | "agency";
   reasons: string[];
   score: number;
   isOvertime: boolean;
   hoursThisWeek: number;
+  restHoursBefore?: number;
 }
 
 interface CoverageRequestData {
@@ -334,10 +337,18 @@ export default function CoverageRequestsPage() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-lg font-semibold">
                             {index + 1}. {candidate.staffName}
                           </span>
+                          {candidate.staffId !== "agency" && candidate.role && (
+                            <Badge variant="secondary" className="text-xs">{candidate.role}</Badge>
+                          )}
+                          {candidate.staffId !== "agency" && candidate.icuCompetencyLevel !== undefined && (
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Lv {candidate.icuCompetencyLevel}/5
+                            </span>
+                          )}
                           <span className={`text-xs px-2 py-1 rounded font-medium ${SOURCE_COLORS[candidate.source]}`}>
                             {SOURCE_LABELS[candidate.source]}
                           </span>
@@ -356,10 +367,20 @@ export default function CoverageRequestsPage() {
                           ))}
                         </ul>
                         {candidate.staffId !== "agency" && (
-                          <p className="text-xs text-muted-foreground">
-                            Hours this week: {candidate.hoursThisWeek}h
-                            {candidate.isOvertime && ` (+${selectedRequest.durationHours}h = overtime)`}
-                          </p>
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            <p>
+                              Hours this week: {candidate.hoursThisWeek}h
+                              {candidate.isOvertime && ` (+${selectedRequest.durationHours}h = overtime)`}
+                            </p>
+                            {candidate.restHoursBefore !== undefined ? (
+                              <p className={candidate.restHoursBefore < 12 ? "text-amber-600" : ""}>
+                                Rest before shift: {Math.round(candidate.restHoursBefore)}h
+                                {candidate.restHoursBefore < 12 ? " — short turnaround" : ""}
+                              </p>
+                            ) : (
+                              <p>Rest before shift: 24h+</p>
+                            )}
+                          </div>
                         )}
                       </div>
                       <Button

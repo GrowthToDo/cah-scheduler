@@ -12,6 +12,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { format, parseISO } from "date-fns";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface SwapRequest {
   id: string;
@@ -28,6 +46,35 @@ interface SwapRequest {
   createdAt: string;
 }
 
+interface SwapViolation {
+  staffId: string;
+  staffName: string;
+  ruleId: string;
+  severity: "hard";
+  description: string;
+}
+
+interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
+
+interface AssignmentOption {
+  id: string;
+  shiftId: string;
+  scheduleId: string;
+  isChargeNurse: boolean;
+  status: string;
+  date: string;
+  shiftName: string;
+  shiftType: string;
+  startTime: string;
+  endTime: string;
+  scheduleName: string;
+}
+
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   pending: "secondary",
   approved: "default",
@@ -35,10 +82,30 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
   cancelled: "outline",
 };
 
+function formatAssignmentLabel(a: AssignmentOption): string {
+  return `${format(parseISO(a.date), "EEE, MMM d")} — ${a.shiftName} (${a.startTime}–${a.endTime})`;
+}
+
 export default function SwapsPage() {
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "denied">("all");
+
+  // Violation error dialog
+  const [violationDialogOpen, setViolationDialogOpen] = useState(false);
+  const [swapViolations, setSwapViolations] = useState<SwapViolation[]>([]);
+
+  // Log swap dialog state
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
+  const [allStaff, setAllStaff] = useState<StaffMember[]>([]);
+  const [requestingStaffId, setRequestingStaffId] = useState("");
+  const [requestingAssignments, setRequestingAssignments] = useState<AssignmentOption[]>([]);
+  const [requestingAssignmentId, setRequestingAssignmentId] = useState("");
+  const [targetStaffId, setTargetStaffId] = useState("");
+  const [targetAssignments, setTargetAssignments] = useState<AssignmentOption[]>([]);
+  const [targetAssignmentId, setTargetAssignmentId] = useState("");
+  const [swapNotes, setSwapNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     const res = await fetch("/api/swap-requests");
@@ -52,11 +119,78 @@ export default function SwapsPage() {
   }, [fetchData]);
 
   async function handleStatusChange(id: string, status: "approved" | "denied") {
-    await fetch(`/api/swap-requests/${id}`, {
+    const res = await fetch(`/api/swap-requests/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+    if (!res.ok) {
+      const data = await res.json();
+      if (res.status === 422 && data.violations) {
+        setSwapViolations(data.violations);
+        setViolationDialogOpen(true);
+        return; // do not refresh — swap was NOT performed
+      }
+    }
+    fetchData();
+  }
+
+  async function openLogDialog() {
+    if (allStaff.length === 0) {
+      const res = await fetch("/api/staff");
+      const data = await res.json();
+      setAllStaff(data);
+    }
+    setRequestingStaffId("");
+    setRequestingAssignments([]);
+    setRequestingAssignmentId("");
+    setTargetStaffId("");
+    setTargetAssignments([]);
+    setTargetAssignmentId("");
+    setSwapNotes("");
+    setLogDialogOpen(true);
+  }
+
+  async function onRequestingStaffChange(staffId: string) {
+    setRequestingStaffId(staffId);
+    setRequestingAssignmentId("");
+    if (!staffId) {
+      setRequestingAssignments([]);
+      return;
+    }
+    const res = await fetch(`/api/assignments?staffId=${staffId}`);
+    const data = await res.json();
+    setRequestingAssignments(data);
+  }
+
+  async function onTargetStaffChange(staffId: string) {
+    setTargetStaffId(staffId);
+    setTargetAssignmentId("");
+    if (!staffId || staffId === "none") {
+      setTargetAssignments([]);
+      return;
+    }
+    const res = await fetch(`/api/assignments?staffId=${staffId}`);
+    const data = await res.json();
+    setTargetAssignments(data);
+  }
+
+  async function handleSubmitSwap() {
+    if (!requestingStaffId || !requestingAssignmentId) return;
+    setSubmitting(true);
+    await fetch("/api/swap-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestingStaffId,
+        requestingAssignmentId,
+        targetStaffId: targetStaffId && targetStaffId !== "none" ? targetStaffId : null,
+        targetAssignmentId: targetAssignmentId || null,
+        notes: swapNotes || null,
+      }),
+    });
+    setSubmitting(false);
+    setLogDialogOpen(false);
     fetchData();
   }
 
@@ -75,6 +209,7 @@ export default function SwapsPage() {
             {swapRequests.length} total requests ({pendingCount} pending review)
           </p>
         </div>
+        <Button onClick={openLogDialog}>Log Swap Request</Button>
       </div>
 
       <div className="mb-4 flex gap-2">
@@ -133,7 +268,7 @@ export default function SwapsPage() {
                     <TableCell>
                       <Badge variant={statusColors[req.status]}>{req.status}</Badge>
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate">{req.notes}</TableCell>
+                    <TableCell className="max-w-50 truncate">{req.notes}</TableCell>
                     <TableCell>
                       {req.status === "pending" && (
                         <div className="flex gap-1">
@@ -161,6 +296,169 @@ export default function SwapsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Log Swap Request Dialog */}
+      <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Log Swap Request</DialogTitle>
+            <DialogDescription>
+              Record a shift swap request between two staff members. Target staff and assignment
+              are optional for open swap requests.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* Requesting staff */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Requesting Staff</h4>
+              <div className="space-y-1.5">
+                <Label>Staff member</Label>
+                <Select value={requestingStaffId} onValueChange={onRequestingStaffChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select staff…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allStaff.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.firstName} {s.lastName} ({s.role})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {requestingStaffId && (
+                <div className="space-y-1.5">
+                  <Label>Shift to swap away</Label>
+                  {requestingAssignments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No upcoming assignments found.
+                    </p>
+                  ) : (
+                    <Select value={requestingAssignmentId} onValueChange={setRequestingAssignmentId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignment…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {requestingAssignments.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {formatAssignmentLabel(a)}
+                            {a.isChargeNurse ? " ★ Charge" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Target staff (optional) */}
+            <div className="space-y-3 border-t pt-4">
+              <h4 className="text-sm font-semibold">
+                Target Staff{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </h4>
+              <div className="space-y-1.5">
+                <Label>Staff member</Label>
+                <Select
+                  value={targetStaffId}
+                  onValueChange={onTargetStaffChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Leave blank for open request…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Open request (no specific target) —</SelectItem>
+                    {allStaff
+                      .filter((s) => s.id !== requestingStaffId)
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.firstName} {s.lastName} ({s.role})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {targetStaffId && targetStaffId !== "none" && (
+                <div className="space-y-1.5">
+                  <Label>Shift to swap into</Label>
+                  {targetAssignments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No upcoming assignments found.
+                    </p>
+                  ) : (
+                    <Select value={targetAssignmentId} onValueChange={setTargetAssignmentId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignment…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {targetAssignments.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {formatAssignmentLabel(a)}
+                            {a.isChargeNurse ? " ★ Charge" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="Reason for swap request…"
+                value={swapNotes}
+                onChange={(e) => setSwapNotes(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <Button variant="outline" onClick={() => setLogDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmitSwap}
+                disabled={!requestingStaffId || !requestingAssignmentId || submitting}
+              >
+                {submitting ? "Submitting…" : "Submit Request"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Swap Violation Dialog */}
+      <Dialog open={violationDialogOpen} onOpenChange={setViolationDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Swap Cannot Be Approved</DialogTitle>
+            <DialogDescription>
+              This swap would violate one or more hard scheduling rules. Resolve the issues below
+              before approving.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {swapViolations.map((v, i) => (
+              <Alert key={i} variant="destructive">
+                <AlertTitle className="capitalize">{v.ruleId.replace(/-/g, " ")}</AlertTitle>
+                <AlertDescription>{v.description}</AlertDescription>
+              </Alert>
+            ))}
+          </div>
+          <div className="flex justify-end pt-2 border-t">
+            <Button variant="outline" onClick={() => setViolationDialogOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6,11 +6,14 @@ import { addDays, parseISO, format, differenceInDays, startOfWeek, endOfWeek } f
 export interface CandidateRecommendation {
   staffId: string;
   staffName: string;
+  role: string;
+  icuCompetencyLevel: number;
   source: "float" | "per_diem" | "overtime" | "agency";
   reasons: string[];
   score: number;
   isOvertime: boolean;
   hoursThisWeek: number;
+  restHoursBefore?: number; // hours of rest between candidate's last preceding shift and this one
 }
 
 interface ShiftDetails {
@@ -83,6 +86,8 @@ export async function findCandidatesForShift(
   allCandidates.push({
     staffId: "agency",
     staffName: "Request Agency Staff",
+    role: "Agency",
+    icuCompetencyLevel: 0,
     source: "agency",
     reasons: ["External staffing agency", "Requires phone call to agency", "Higher cost option"],
     score: 10, // Lowest priority score
@@ -146,11 +151,14 @@ async function findFloatCandidates(
     candidates.push({
       staffId: s.id,
       staffName: `${s.firstName} ${s.lastName}`,
+      role: s.role,
+      icuCompetencyLevel: s.icuCompetencyLevel,
       source: "float",
       reasons,
       score,
       isOvertime: availability.hoursThisWeek + shiftDetails.durationHours > 40,
       hoursThisWeek: availability.hoursThisWeek,
+      restHoursBefore: availability.restHoursBefore,
     });
   }
 
@@ -218,11 +226,14 @@ async function findPRNCandidates(
     candidates.push({
       staffId: s.id,
       staffName: `${s.firstName} ${s.lastName}`,
+      role: s.role,
+      icuCompetencyLevel: s.icuCompetencyLevel,
       source: "per_diem",
       reasons,
       score,
       isOvertime: false, // PRN doesn't have regular hours
       hoursThisWeek: availability.hoursThisWeek,
+      restHoursBefore: availability.restHoursBefore,
     });
   }
 
@@ -292,11 +303,14 @@ async function findOvertimeCandidates(
     candidates.push({
       staffId: s.id,
       staffName: `${s.firstName} ${s.lastName}`,
+      role: s.role,
+      icuCompetencyLevel: s.icuCompetencyLevel,
       source: "overtime",
       reasons,
       score,
       isOvertime: wouldBeOvertime,
       hoursThisWeek: availability.hoursThisWeek,
+      restHoursBefore: availability.restHoursBefore,
     });
   }
 
@@ -307,6 +321,7 @@ interface AvailabilityResult {
   available: boolean;
   hoursThisWeek: number;
   reason?: string;
+  restHoursBefore?: number;
 }
 
 async function checkStaffAvailability(
@@ -419,6 +434,8 @@ async function checkStaffAvailability(
     )
     .all();
 
+  let restHoursBefore: number | undefined;
+
   for (const prev of previousDayAssignments) {
     // If previous shift ends late and new shift starts early, check rest period
     const prevEndHour = parseInt(prev.endTime.split(":")[0]);
@@ -436,9 +453,14 @@ async function checkStaffAvailability(
     if (restHours < 10) {
       return { available: false, hoursThisWeek, reason: "Insufficient rest time (< 10 hours)" };
     }
+
+    // Track minimum rest for display purposes
+    if (restHoursBefore === undefined || restHours < restHoursBefore) {
+      restHoursBefore = restHours;
+    }
   }
 
-  return { available: true, hoursThisWeek };
+  return { available: true, hoursThisWeek, restHoursBefore };
 }
 
 function shiftsOverlap(

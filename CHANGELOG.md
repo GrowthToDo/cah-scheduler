@@ -6,6 +6,104 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.27] - 2026-02-25
+
+### Fixed
+
+- **Swap approval now validates hard scheduling rules before performing the swap.**
+
+  Approving a directed swap previously swapped the two staff members' assignment IDs without any eligibility check. This allowed swaps such as a Level 3 nurse taking a charge nurse slot (which requires Level 4+), or a Level 2 nurse being placed on a shift with no Level 4+ supervisor remaining. The `PUT /api/swap-requests/[id]` route now runs five hard-rule checks before performing the swap:
+
+  1. **ICU competency** — both incoming staff members must be Level 2 or above.
+  2. **Charge nurse** — if the assignment carries the charge nurse role (`isChargeNurse: true`), the incoming staff must be Level 4 or above.
+  3. **Level 2 supervision** — if the incoming staff is Level 2, a Level 4+ coworker must remain on the shift after the swap.
+  4. **Approved leave conflict** — staff cannot take a shift on a date covered by approved leave.
+  5. **Same-date overlap** — staff cannot take a shift that overlaps with another assignment they already hold on the same date.
+
+  If any violation is found, the route returns `422 Unprocessable Entity` with a `violations` array and the swap is NOT performed. The swaps page shows a dialog listing each violation with the rule name and description.
+
+- **Approving an open swap request now creates a coverage request.**
+
+  Previously, approving an open swap request (no target staff selected) set the swap status to `approved` but took no further action — the requesting staff member was still scheduled, and no coverage was sought. The approve flow now sets the requesting assignment to `swapped` and creates an `open_shift` coverage record so it appears on the Coverage Requests page for the manager to find a replacement.
+
+### Files Modified
+
+- `src/lib/swap/validate-swap.ts` — **new** pure validation library; exports `validateSwapSide`, `validateSwap`, `shiftsOverlap`
+- `src/app/api/swap-requests/[id]/route.ts` — validation before directed swap; open swap creates coverage request
+- `src/app/swaps/page.tsx` — violation dialog shown when API returns 422
+- `src/__tests__/swap/validate-swap.test.ts` — **new** 20-test suite covering all validation rules
+
+---
+
+## [1.4.26] - 2026-02-25
+
+### Added
+
+- **Shift Swap Request creation UI.**
+
+  The Shift Swap Requests page previously had no way to create a swap request — the page was read-only (approve/deny only). Added a "Log Swap Request" button that opens a dialog matching the style and two-step pattern of the callouts page:
+
+  1. **Requesting staff** — select any staff member, then choose one of their upcoming assignments as the shift they want to swap away.
+  2. **Target staff** (optional) — select a second staff member and their assignment for a directed swap, or leave blank to create an open swap request that any eligible staff can be matched to.
+  3. **Notes** — optional free-text reason.
+
+  On submit, the dialog calls `POST /api/swap-requests` (existing endpoint). The new request then appears in the table with `pending` status and the manager's usual Approve/Deny actions.
+
+  The existing `PUT /api/swap-requests/[id]` approve flow atomically swaps `staffId` on both assignments — that logic was already in place; only the creation UI was missing.
+
+- **`GET /api/assignments` endpoint.**
+
+  New API endpoint used by the swap request dialog to populate assignment dropdowns. Accepts `?staffId=X` and returns that staff member's upcoming assignments (today onwards, excluding `called_out` and `cancelled`), joined with shift definition and schedule names so the dialog can display human-readable labels (e.g. "Mon, Mar 2 — Day Shift (07:00–19:00) ★ Charge").
+
+- **`src/components/ui/textarea.tsx`** — new Radix-style Textarea component used by the notes field in the swap request dialog.
+
+### Files Modified
+
+- `src/app/swaps/page.tsx` — "Log Swap Request" button, dialog with staff/assignment selectors and notes field
+- `src/app/api/assignments/route.ts` — new `GET /api/assignments?staffId=X` endpoint
+- `src/components/ui/textarea.tsx` — new UI component
+
+---
+
+## [1.4.25] - 2026-02-25
+
+### Fixed
+
+- **Leave-conflict hard violation no longer fires for called-out nurses.**
+
+  `buildContext` in `src/lib/engine/rule-engine.ts` fetched all assignments for the schedule without filtering by status. This caused `called_out` assignments to be included in the rule evaluation context, so rules like the staff-on-leave check would still fire for staff members who were removed from the shift via the callout or coverage-request workflow. Added `ne(assignment.status, "called_out")` and `ne(assignment.status, "cancelled")` filters to the DB query so the rule engine only evaluates assignments for staff who are actually working the shift.
+
+- **Role-incompatible staff no longer appear as coverage candidates.**
+
+  `getEscalationOptions` in `src/lib/callout/escalation.ts` was classifying role-incompatible candidates (e.g. a CNA for an RN vacancy) as `isEligible: false` and surfacing them in the "ineligible" section of the recommendations list. A CNA cannot perform RN duties under any circumstances, so their presence in any candidate list is misleading. Role rank below the called-out nurse's role now causes the candidate to be skipped entirely rather than flagged as ineligible.
+
+- **Replacement assignment now inherits the charge nurse role from the called-out nurse.**
+
+  `PUT /api/open-shifts/[id]` (approve and fill actions) and `PUT /api/callouts/[id]` all hardcoded `isChargeNurse: false` when creating the replacement assignment. Approving a replacement for a charge nurse vacancy therefore immediately introduced a "Charge Nurse Required" hard violation — and, in ICU shifts with Level 2 staff already present, a "Level 2 Supervision" violation as well. All three route handlers now look up the original assignment's `isChargeNurse` flag and inherit it for the replacement.
+
+### Changed
+
+- **Replacement candidate cards now show ICU competency level, role, and rest hours before the shift.**
+
+  Both the Coverage Requests approval dialog (`src/app/open-shifts/page.tsx`) and the Callout replacement dialog (`src/app/callouts/page.tsx`) previously omitted clinically relevant details that managers need to make the right call:
+
+  - **ICU competency level (Lv X/5)** and **role (RN/LPN/CNA)** — now displayed in the name row of each candidate card so qualifications are visible without navigating to the staff page.
+  - **Rest hours before shift** — the hours between the candidate's last preceding shift and the shift being covered. Candidates with ≥24h since their last shift show "24h+". Candidates with a recent preceding shift (e.g., 12h rest after a night shift) show the exact hours. Values below 12h are highlighted in amber with a "short turnaround" label to flag potential fatigue.
+
+  `CandidateRecommendation` in `src/lib/coverage/find-candidates.ts` and `ReplacementCandidate` in `src/lib/callout/escalation.ts` both gained a `restHoursBefore?: number` field. The D-1 rest check in both libraries already computed this value to enforce the ≥10h minimum — it is now also tracked and returned so the UI can display it.
+
+### Files Modified
+
+- `src/lib/engine/rule-engine.ts` — DB query now excludes `called_out` and `cancelled` assignments; added `ne` to drizzle import
+- `src/lib/callout/escalation.ts` — role-incompatible staff skipped with `continue` instead of added as ineligible candidates; `restHoursBefore` computed and added to candidate data
+- `src/lib/coverage/find-candidates.ts` — `role`, `icuCompetencyLevel`, `restHoursBefore` added to `CandidateRecommendation`; rest tracking added to `checkStaffAvailability`
+- `src/app/open-shifts/page.tsx` — candidate cards show role badge, Lv X/5, rest hours
+- `src/app/callouts/page.tsx` — candidate cards show rest hours before shift
+- `src/app/api/open-shifts/[id]/route.ts` — approve and fill actions inherit `isChargeNurse` from original assignment
+- `src/app/api/callouts/[id]/route.ts` — replacement assignment creation inherits `isChargeNurse` from original assignment
+
+---
+
 ## [1.4.24] - 2026-02-25
 
 ### Fixed
