@@ -36,6 +36,12 @@ export interface SwapSideParams {
    * Used to detect same-date overlaps.
    */
   otherAssignmentsOnDate: Array<{ startTime: string; endTime: string }>;
+  /**
+   * Staff member's assignments on the day before (D-1) and day after (D+1) takesShift.date,
+   * excluding their current assignment that is being swapped out.
+   * Used for the ≥10h rest-between-shifts check.
+   */
+  adjacentAssignments: Array<{ date: string; startTime: string; endTime: string }>;
   /** True when staff has an approved leave record covering takesShift.date */
   hasApprovedLeave: boolean;
 }
@@ -70,11 +76,36 @@ export function shiftsOverlap(
   return sA < endBNorm && endANorm > sB;
 }
 
+/**
+ * Compute the rest gap in minutes between two consecutive assignments.
+ * @param prevEnd   endTime of the earlier assignment (HH:MM)
+ * @param prevIsOvernight true when prevShift crosses midnight (endTime ≤ startTime of that shift)
+ * @param nextStart startTime of the later assignment (HH:MM)
+ */
+export function computeRestGapMins(
+  prevEnd: string,
+  prevIsOvernight: boolean,
+  nextStart: string
+): number {
+  const prevEndMins = timesToMins(prevEnd);
+  const nextStartMins = timesToMins(nextStart);
+  // Overnight D-1 shift ends early morning on D — gap is simply nextStart - prevEnd
+  if (prevIsOvernight) return nextStartMins - prevEndMins;
+  // Normal D-1 shift ends on D-1 — gap spans midnight
+  return 24 * 60 - prevEndMins + nextStartMins;
+}
+
 /** Validate one side of a proposed swap. Returns hard violations only. */
 export function validateSwapSide(side: SwapSideParams): SwapViolation[] {
   const violations: SwapViolation[] = [];
-  const { staff, takesShift, coworkersOnTakesShift, otherAssignmentsOnDate, hasApprovedLeave } =
-    side;
+  const {
+    staff,
+    takesShift,
+    coworkersOnTakesShift,
+    otherAssignmentsOnDate,
+    adjacentAssignments,
+    hasApprovedLeave,
+  } = side;
 
   // 1. Approved leave conflict
   if (hasApprovedLeave) {
@@ -134,6 +165,44 @@ export function validateSwapSide(side: SwapSideParams): SwapViolation[] {
         description: `${staff.name} already has a shift on ${takesShift.date} that overlaps with ${takesShift.startTime}–${takesShift.endTime}.`,
       });
       break;
+    }
+  }
+
+  // 6. Rest hours (≥10h) — check D-1 and D+1 adjacent assignments
+  const newShiftIsOvernight =
+    timesToMins(takesShift.endTime) <= timesToMins(takesShift.startTime);
+
+  for (const adj of adjacentAssignments) {
+    const isPrev = adj.date < takesShift.date; // D-1
+    const isNext = adj.date > takesShift.date; // D+1
+
+    if (isPrev) {
+      // Gap: from adj.endTime → takesShift.startTime
+      const adjIsOvernight = timesToMins(adj.endTime) <= timesToMins(adj.startTime);
+      const gapMins = computeRestGapMins(adj.endTime, adjIsOvernight, takesShift.startTime);
+      if (gapMins < 10 * 60) {
+        violations.push({
+          staffId: staff.id,
+          staffName: staff.name,
+          ruleId: "rest-hours",
+          severity: "hard",
+          description: `${staff.name} would have only ${Math.round(gapMins / 60)}h rest before this shift (minimum 10h required). They finish a shift at ${adj.endTime} on ${adj.date}.`,
+        });
+      }
+    }
+
+    if (isNext) {
+      // Gap: from takesShift.endTime → adj.startTime
+      const gapMins = computeRestGapMins(takesShift.endTime, newShiftIsOvernight, adj.startTime);
+      if (gapMins < 10 * 60) {
+        violations.push({
+          staffId: staff.id,
+          staffName: staff.name,
+          ruleId: "rest-hours",
+          severity: "hard",
+          description: `${staff.name} would have only ${Math.round(gapMins / 60)}h rest after this shift before their next shift at ${adj.startTime} on ${adj.date} (minimum 10h required).`,
+        });
+      }
     }
   }
 

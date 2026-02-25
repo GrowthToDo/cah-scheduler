@@ -3,6 +3,7 @@ import {
   validateSwap,
   validateSwapSide,
   shiftsOverlap,
+  computeRestGapMins,
   type SwapSideParams,
 } from "@/lib/swap/validate-swap";
 
@@ -28,6 +29,7 @@ function makeSide(overrides: Partial<SwapSideParams> = {}): SwapSideParams {
     },
     coworkersOnTakesShift: [{ icuCompetencyLevel: 4 }],
     otherAssignmentsOnDate: [],
+    adjacentAssignments: [],
     hasApprovedLeave: false,
     ...overrides,
   };
@@ -222,5 +224,95 @@ describe("validateSwap", () => {
     });
     const violations = validateSwap(s1, s2);
     expect(violations.filter(v => v.ruleId === "leave-conflict")).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeRestGapMins (unit tests)
+// ---------------------------------------------------------------------------
+
+describe("computeRestGapMins", () => {
+  it("normal day shift on D-1 ending 19:00, new shift starts 07:00 on D → 12h rest", () => {
+    // 24:00 - 19:00 + 7:00 = 12h
+    expect(computeRestGapMins("19:00", false, "07:00")).toBe(12 * 60);
+  });
+
+  it("normal shift ending 19:00, next starts 05:00 → exactly 10h", () => {
+    expect(computeRestGapMins("19:00", false, "05:00")).toBe(10 * 60);
+  });
+
+  it("normal shift ending 22:00, next starts 07:00 → only 9h (violation territory)", () => {
+    expect(computeRestGapMins("22:00", false, "07:00")).toBe(9 * 60);
+  });
+
+  it("overnight shift (ends 07:00 on D), new shift starts 19:00 on D → 12h rest", () => {
+    // Overnight flag = true: gap = 19:00 - 07:00 = 12h
+    expect(computeRestGapMins("07:00", true, "19:00")).toBe(12 * 60);
+  });
+
+  it("overnight shift ending 07:00, new shift starts 07:00 → 0h rest", () => {
+    expect(computeRestGapMins("07:00", true, "07:00")).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateSwapSide — rest-hours checks
+// ---------------------------------------------------------------------------
+
+describe("validateSwapSide rest-hours", () => {
+  it("passes when no adjacent assignments exist", () => {
+    const side = makeSide({ adjacentAssignments: [] });
+    expect(validateSwapSide(side)).toHaveLength(0);
+  });
+
+  it("passes when D-1 shift leaves exactly 10h rest (07:00 start, D-1 ends 21:00)", () => {
+    // 24h - 21h + 7h = 10h exactly — boundary pass
+    const side = makeSide({
+      takesShift: { date: "2026-03-10", startTime: "07:00", endTime: "19:00", isChargeNurse: false, unit: "ICU" },
+      adjacentAssignments: [{ date: "2026-03-09", startTime: "09:00", endTime: "21:00" }],
+    });
+    expect(validateSwapSide(side).filter(v => v.ruleId === "rest-hours")).toHaveLength(0);
+  });
+
+  it("flags a D-1 assignment that leaves only 9h rest", () => {
+    // D-1 shift ends 22:00, new shift starts 07:00 → 9h rest (< 10h)
+    const side = makeSide({
+      takesShift: { date: "2026-03-10", startTime: "07:00", endTime: "19:00", isChargeNurse: false, unit: "ICU" },
+      adjacentAssignments: [{ date: "2026-03-09", startTime: "10:00", endTime: "22:00" }],
+    });
+    const violations = validateSwapSide(side).filter(v => v.ruleId === "rest-hours");
+    expect(violations).toHaveLength(1);
+    expect(violations[0].description).toContain("9h rest before");
+  });
+
+  it("flags a D+1 assignment that leaves only 8h rest after an overnight shift", () => {
+    // Overnight shift ends 07:00 on D+1, D+1 shift starts 15:00 on D+1 → 8h rest
+    const side = makeSide({
+      takesShift: { date: "2026-03-10", startTime: "19:00", endTime: "07:00", isChargeNurse: false, unit: "ICU" },
+      adjacentAssignments: [{ date: "2026-03-11", startTime: "15:00", endTime: "23:00" }],
+    });
+    const violations = validateSwapSide(side).filter(v => v.ruleId === "rest-hours");
+    expect(violations).toHaveLength(1);
+    expect(violations[0].description).toContain("8h rest after");
+  });
+
+  it("passes when D+1 assignment starts 12h after a day shift ends", () => {
+    // Day shift ends 19:00 on D, D+1 shift starts 07:00 → 12h rest
+    const side = makeSide({
+      takesShift: { date: "2026-03-10", startTime: "07:00", endTime: "19:00", isChargeNurse: false, unit: "ICU" },
+      adjacentAssignments: [{ date: "2026-03-11", startTime: "07:00", endTime: "19:00" }],
+    });
+    expect(validateSwapSide(side).filter(v => v.ruleId === "rest-hours")).toHaveLength(0);
+  });
+
+  it("overnight D-1 shift ending 07:00 gives 0h rest if new shift also starts 07:00 (flags)", () => {
+    // D-1 overnight ends 07:00, new shift starts 07:00 → 0h
+    const side = makeSide({
+      takesShift: { date: "2026-03-10", startTime: "07:00", endTime: "19:00", isChargeNurse: false, unit: "ICU" },
+      adjacentAssignments: [{ date: "2026-03-09", startTime: "19:00", endTime: "07:00" }],
+    });
+    const violations = validateSwapSide(side).filter(v => v.ruleId === "rest-hours");
+    expect(violations).toHaveLength(1);
+    expect(violations[0].description).toContain("0h rest before");
   });
 });

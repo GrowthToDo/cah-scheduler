@@ -100,6 +100,44 @@ function getOtherAssignmentsOnDate(
 }
 
 // ---------------------------------------------------------------------------
+// Helper: fetch assignments on D-1 and D+1 for rest-hours check
+// (excluding a known assignment ID that is being swapped out)
+// ---------------------------------------------------------------------------
+function addDays(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function getAdjacentAssignments(
+  staffId: string,
+  date: string,
+  excludeAssignmentId: string
+) {
+  const prevDate = addDays(date, -1);
+  const nextDate = addDays(date, 1);
+  return db
+    .select({
+      date: shift.date,
+      startTime: shiftDefinition.startTime,
+      endTime: shiftDefinition.endTime,
+    })
+    .from(assignment)
+    .innerJoin(shift, eq(assignment.shiftId, shift.id))
+    .innerJoin(shiftDefinition, eq(shift.shiftDefinitionId, shiftDefinition.id))
+    .where(
+      and(
+        eq(assignment.staffId, staffId),
+        ne(assignment.id, excludeAssignmentId),
+        ne(assignment.status, "called_out"),
+        ne(assignment.status, "cancelled")
+      )
+    )
+    .all()
+    .filter((row) => row.date === prevDate || row.date === nextDate);
+}
+
+// ---------------------------------------------------------------------------
 // Helper: does staff have approved leave covering a date?
 // ---------------------------------------------------------------------------
 function hasApprovedLeave(staffId: string, date: string): boolean {
@@ -255,6 +293,19 @@ export async function PUT(
           const reqHasLeave = hasApprovedLeave(existing.requestingStaffId, tgtShiftDetails.date);
           const tgtHasLeave = hasApprovedLeave(existing.targetStaffId, reqShiftDetails.date);
 
+          // Adjacent (D-1/D+1) assignments for rest-hours check
+          // Each staff member moves to a new date, so we check adjacency around their NEW date.
+          const reqAdjacentToTgtDate = getAdjacentAssignments(
+            existing.requestingStaffId,
+            tgtShiftDetails.date,
+            requestingAssignment.id
+          );
+          const tgtAdjacentToReqDate = getAdjacentAssignments(
+            existing.targetStaffId,
+            reqShiftDetails.date,
+            targetAssignment.id
+          );
+
           // Requesting staff takes the TARGET shift
           const requestingSide: SwapSideParams = {
             staff: {
@@ -273,6 +324,7 @@ export async function PUT(
             },
             coworkersOnTakesShift: coworkersOnTgtShift,
             otherAssignmentsOnDate: reqOtherOnTgtDate,
+            adjacentAssignments: reqAdjacentToTgtDate,
             hasApprovedLeave: reqHasLeave,
           };
 
@@ -294,6 +346,7 @@ export async function PUT(
             },
             coworkersOnTakesShift: coworkersOnReqShift,
             otherAssignmentsOnDate: tgtOtherOnReqDate,
+            adjacentAssignments: tgtAdjacentToReqDate,
             hasApprovedLeave: tgtHasLeave,
           };
 

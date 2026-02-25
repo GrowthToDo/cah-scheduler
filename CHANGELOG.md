@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   3. **Level 2 supervision** — if the incoming staff is Level 2, a Level 4+ coworker must remain on the shift after the swap.
   4. **Approved leave conflict** — staff cannot take a shift on a date covered by approved leave.
   5. **Same-date overlap** — staff cannot take a shift that overlaps with another assignment they already hold on the same date.
+  6. **Rest hours** — staff must have at least 10 hours rest between this shift and any adjacent assignment on the day before or day after.
 
   If any violation is found, the route returns `422 Unprocessable Entity` with a `violations` array and the swap is NOT performed. The swaps page shows a dialog listing each violation with the rule name and description.
 
@@ -28,10 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Files Modified
 
-- `src/lib/swap/validate-swap.ts` — **new** pure validation library; exports `validateSwapSide`, `validateSwap`, `shiftsOverlap`
+- `src/lib/swap/validate-swap.ts` — **new** pure validation library; exports `validateSwapSide`, `validateSwap`, `shiftsOverlap`, `computeRestGapMins`
 - `src/app/api/swap-requests/[id]/route.ts` — validation before directed swap; open swap creates coverage request
 - `src/app/swaps/page.tsx` — violation dialog shown when API returns 422
 - `src/__tests__/swap/validate-swap.test.ts` — **new** 20-test suite covering all validation rules
+- `docs/06-managing-requests.md` — added rest-hours check to the swap validation table
 
 ---
 

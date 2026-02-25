@@ -194,6 +194,7 @@ When you click "Approve" on a directed swap, the system validates these hard rul
 | **Level 2 supervision** | Incoming staff is Level 2 with no Level 4+ coworker remaining on that shift |
 | **Approved leave** | Incoming staff has approved leave on the date of their new shift |
 | **Shift overlap** | Incoming staff is already assigned to another shift that overlaps |
+| **Rest hours** | Incoming staff would have fewer than 10 hours rest before or after this shift based on their existing adjacent assignments |
 
 If any check fails, a dialog appears listing every violation. The swap is **not** performed and the request stays Pending so you can investigate and either deny it or correct the issue.
 
