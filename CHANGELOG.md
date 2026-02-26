@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.31] - 2026-02-26
+
+### Fixed
+
+- **Callout fill no longer silently drops audit entries when the replacement is already assigned to the shift.**
+
+  The `PUT /api/callouts/[id]` handler inserts a replacement assignment after marking the callout filled. If the replacement staff already had an assignment on that shift (e.g. a double-submit or an edge case where they appear in both the schedule and the escalation list), the `UNIQUE(shiftId, staffId)` constraint on the assignment table caused an uncaught exception. Because `better-sqlite3` auto-commits each statement, the `callout.status = "filled"` update was already persisted when the error occurred, and both subsequent `logAuditEvent` calls (`manual_assignment` and `callout_filled`) were never reached. The assignment insert is now wrapped in a try-catch; a UNIQUE constraint failure skips the duplicate insert but execution always falls through to write the `callout_filled` audit event.
+
+- **Callout fill UI no longer silently ignores a server error response.**
+
+  `handleFillCallout` previously had no check on the fetch response status. If the PUT returned a non-2xx response for any reason, the escalation dialog would close as if successful while nothing was written to the DB or audit trail. The function now checks `res.ok` and shows an alert with the server error message so the manager knows the fill did not complete.
+
+- **Audit Trail page now has a Refresh button.**
+
+  The audit trail page only re-fetched log data when a filter value changed. If the user kept the page open in a tab and performed callout or leave actions elsewhere, the page would display stale data with no way to reload short of changing a filter or navigating away and back. A "Refresh" button has been added next to Export CSV to trigger an immediate re-fetch without changing any filter.
+
+### Files Modified
+
+- `src/app/api/callouts/[id]/route.ts` — try-catch around assignment insert; `callout_filled` audit always written
+- `src/app/callouts/page.tsx` — `res.ok` check in `handleFillCallout`; alert on error
+- `src/app/audit/page.tsx` — Refresh button added to page header
+
+---
+
 ## [1.4.30] - 2026-02-26
 
 ### Changed

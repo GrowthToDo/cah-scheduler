@@ -128,9 +128,14 @@ export default function AuditPage() {
             Decision history and exception logs.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => exportToCsv(logs)} disabled={logs.length === 0}>
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => fetchLogs()}>
+            Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => exportToCsv(logs)} disabled={logs.length === 0}>
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">

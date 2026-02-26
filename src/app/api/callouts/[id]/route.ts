@@ -110,27 +110,36 @@ export async function PUT(
       const staffHomeUnit = replacementStaff?.homeUnit ?? "ICU";
       const isFloat = staffHomeUnit !== shiftUnit;
 
-      db.insert(assignment)
-        .values({
-          shiftId: updated.shiftId,
-          staffId: body.replacementStaffId,
-          scheduleId: shiftRecord.scheduleId,
-          status: "assigned",
-          assignmentSource: "callout_replacement",
-          isFloat,
-          floatFromUnit: isFloat ? staffHomeUnit : null,
-          isChargeNurse: originalWasCharge,
-          isOvertime: body.replacementSource === "overtime",
-        })
-        .run();
+      // Wrap in try-catch to guard against the UNIQUE(shiftId, staffId) constraint
+      // on the assignment table. If the replacement is already assigned to this shift
+      // (e.g. double-submit, or edge case from the schedule), we skip the duplicate
+      // insert but still fall through to write the callout_filled audit event below.
+      try {
+        db.insert(assignment)
+          .values({
+            shiftId: updated.shiftId,
+            staffId: body.replacementStaffId,
+            scheduleId: shiftRecord.scheduleId,
+            status: "assigned",
+            assignmentSource: "callout_replacement",
+            isFloat,
+            floatFromUnit: isFloat ? staffHomeUnit : null,
+            isChargeNurse: originalWasCharge,
+            isOvertime: body.replacementSource === "overtime",
+          })
+          .run();
 
-      logAuditEvent({
-        entityType: "assignment",
-        entityId: body.replacementStaffId,
-        action: "manual_assignment",
-        description: `Replacement assignment created: ${replacementName} assigned to shift on ${shiftRecord.date}`,
-        newState: { shiftId: updated.shiftId, assignmentSource: "callout_replacement" },
-      });
+        logAuditEvent({
+          entityType: "assignment",
+          entityId: body.replacementStaffId,
+          action: "manual_assignment",
+          description: `Replacement assignment created: ${replacementName} assigned to shift on ${shiftRecord.date}`,
+          newState: { shiftId: updated.shiftId, assignmentSource: "callout_replacement" },
+        });
+      } catch {
+        // UNIQUE constraint: replacement already assigned to this shift.
+        // Skip the duplicate insert — callout_filled is still written below.
+      }
     }
   }
 

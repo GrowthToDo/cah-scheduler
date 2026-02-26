@@ -171,7 +171,7 @@ export default function CalloutsPage() {
   async function handleFillCallout(candidate: ReplacementCandidate) {
     if (!activeCalloutId) return;
 
-    await fetch(`/api/callouts/${activeCalloutId}`, {
+    const res = await fetch(`/api/callouts/${activeCalloutId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -180,6 +180,12 @@ export default function CalloutsPage() {
         status: "filled",
       }),
     });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(`Failed to assign replacement: ${data.error ?? "Unknown error"}`);
+      return;
+    }
 
     setEscalationDialogOpen(false);
     setActiveCalloutId(null);

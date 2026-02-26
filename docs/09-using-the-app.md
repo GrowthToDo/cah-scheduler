@@ -569,6 +569,7 @@ If no target staff was selected, approving the request:
 | Find events for a specific entity type | Use the **Entity** filter (Callouts, Leave, Swaps, etc.) |
 | Find a specific action | Use the **Action** filter |
 | Narrow to a date range | Set the **From** and **To** date pickers, then click Clear to reset |
+| See entries you just created without navigating away | Click **Refresh** in the top-right corner |
 | Download for a staffing committee | Click **Export CSV** in the top-right corner |
 
 ### Why Use Audit Trail?
