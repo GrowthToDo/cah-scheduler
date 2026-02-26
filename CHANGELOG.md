@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.30] - 2026-02-26
+
+### Changed
+
+- **Callout Management — replacement name, shift context, and detail view.**
+
+  The callout history table previously showed only "Filled" where the replacement nurse's name should appear, because the GET API never joined the staff table a second time for the replacement record. The API now joins `staff` twice (aliased), and also joins `shift` + `shiftDefinition` to surface the shift date and shift type. The history table now shows the replacement nurse's full name, the shift date and type, and the callout reason detail inline. A "View" button opens a detail dialog for resolved callouts showing: shift, reason, called-out timestamp, replacement, source, resolved timestamp, and any escalation steps taken.
+
+- **Callout and leave audit log descriptions now use staff names instead of UUIDs.**
+
+  Callout POST and PUT audit entries previously embedded raw UUIDs (`Callout logged for staff <uuid>`). Both routes now look up the staff name before writing to the exception log, producing readable entries (`Callout logged for Maria Garcia (sick)`, `Callout filled — John Smith assigned via overtime`).
+
+- **Leave Management — denial reason required, detail view, day count, submitted date.**
+
+  Denying a leave request now opens a dedicated dialog requiring a written denial reason before the denial can be confirmed. The API enforces this server-side (HTTP 400 if `denialReason` is absent on a `denied` status change). The leave list no longer truncates notes; all requests now have a "View" button that opens a detail dialog showing: staff, leave type, date range with day count, status, submitted timestamp, and (depending on status) either the approval timestamp/approver or the denial reason. Duration in calendar days is now shown inline on the list.
+
+- **Leave audit trail now includes `leave_requested` events.**
+
+  The POST `/api/staff-leave` route previously wrote no audit entry when a leave request was created. It now logs a `leave_requested` event with the staff name, leave type, and date range. The `leave_approved` and `leave_denied` entries previously embedded staff UUIDs in the description; these now use the staff name and include the denial reason when applicable.
+
+- **Audit Trail — text overflow fixed, new filters, CSV export.**
+
+  Long UUID strings in description cells caused text to overlap adjacent columns. The description cell now uses `wrap-break-word`. Added entity filters for Leave and Swaps (previously absent from the dropdown). Added a date range filter (`from` / `to`) backed by API support (`gte`/`lte` on `createdAt`). Added an Export CSV button that downloads the current filtered view. Action label map extended to cover `leave_requested`, `leave_approved`, `leave_denied`, `schedule_auto_generated`, `open_shift_created`, `open_shift_filled`, and swap variants.
+
+### Files Modified
+
+- `src/app/api/callouts/route.ts` — alias join for replacement staff, shift/shiftDefinition join, readable audit descriptions
+- `src/app/api/callouts/[id]/route.ts` — readable audit descriptions using staff names
+- `src/app/api/staff-leave/route.ts` — return `submittedAt`, `approvedAt`, `approvedBy`, `denialReason`, `reason`; add `leave_requested` audit event
+- `src/app/api/staff-leave/[id]/route.ts` — require `denialReason` on denial (400 if absent), readable audit descriptions with staff name and denial reason
+- `src/app/api/audit/route.ts` — `from`/`to` date range filter params; limit raised to 200
+- `src/app/callouts/page.tsx` — replacement name column, shift column, reason detail, detail dialog
+- `src/app/audit/page.tsx` — overflow fix, Leave/Swap entity filters, date range UI, CSV export, extended action labels
+- `src/app/leave/page.tsx` — day count, submitted date column, required denial reason dialog, detail dialog, View button for all statuses
+
+---
+
 ## [1.4.29] - 2026-02-26
 
 ### Changed

@@ -77,9 +77,18 @@ export async function PUT(
   // Create a replacement assignment so the grid shows the new nurse.
   // If the called-out nurse held the charge role, inherit it for the replacement
   // so the shift doesn't immediately gain a "Charge Nurse Required" hard violation.
+  // Look up replacement staff name once for use in audit descriptions
+  const replacementStaffRecord = body.replacementStaffId
+    ? db.select({ firstName: staff.firstName, lastName: staff.lastName })
+        .from(staff).where(eq(staff.id, body.replacementStaffId)).get()
+    : null;
+  const replacementName = replacementStaffRecord
+    ? `${replacementStaffRecord.firstName} ${replacementStaffRecord.lastName}`
+    : body.replacementStaffId;
+
   if (body.replacementStaffId && updated.shiftId) {
     const shiftRecord = db
-      .select({ scheduleId: shift.scheduleId })
+      .select({ scheduleId: shift.scheduleId, date: shift.date })
       .from(shift)
       .where(eq(shift.id, updated.shiftId))
       .get();
@@ -119,17 +128,18 @@ export async function PUT(
         entityType: "assignment",
         entityId: body.replacementStaffId,
         action: "manual_assignment",
-        description: `Replacement assignment created for callout ${id} on shift ${updated.shiftId}`,
+        description: `Replacement assignment created: ${replacementName} assigned to shift on ${shiftRecord.date}`,
         newState: { shiftId: updated.shiftId, assignmentSource: "callout_replacement" },
       });
     }
   }
 
+  const sourceLabel = body.replacementSource ?? "unknown";
   logAuditEvent({
     entityType: "callout",
     entityId: id,
     action: "callout_filled",
-    description: `Callout filled with replacement staff ${body.replacementStaffId} via ${body.replacementSource}`,
+    description: `Callout filled — ${replacementName} assigned via ${sourceLabel}`,
     newState: updated as unknown as Record<string, unknown>,
   });
 

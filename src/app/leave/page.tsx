@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -38,6 +39,11 @@ interface LeaveRequest {
   endDate: string;
   status: "pending" | "approved" | "denied";
   notes: string | null;
+  reason: string | null;
+  submittedAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  denialReason: string | null;
   createdAt: string;
 }
 
@@ -63,12 +69,27 @@ const statusColors: Record<string, "default" | "secondary" | "destructive"> = {
   denied: "destructive",
 };
 
+function calcDays(startDate: string, endDate: string): number {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  return diff + 1;
+}
+
 export default function LeavePage() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "denied">("all");
+
+  // Detail dialog
+  const [detailRequest, setDetailRequest] = useState<LeaveRequest | null>(null);
+
+  // Denial dialog
+  const [denyTarget, setDenyTarget] = useState<LeaveRequest | null>(null);
+  const [denialReason, setDenialReason] = useState("");
+  const [denyError, setDenyError] = useState("");
 
   const [form, setForm] = useState({
     staffId: "",
@@ -106,12 +127,34 @@ export default function LeavePage() {
     fetchData();
   }
 
-  async function handleStatusChange(id: string, status: "approved" | "denied") {
+  async function handleApprove(id: string) {
     await fetch(`/api/staff-leave/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status: "approved" }),
     });
+    fetchData();
+  }
+
+  async function handleDenySubmit() {
+    if (!denyTarget) return;
+    if (!denialReason.trim()) {
+      setDenyError("A denial reason is required.");
+      return;
+    }
+    const res = await fetch(`/api/staff-leave/${denyTarget.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "denied", denialReason: denialReason.trim() }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      setDenyError(data.error ?? "Failed to deny request.");
+      return;
+    }
+    setDenyTarget(null);
+    setDenialReason("");
+    setDenyError("");
     fetchData();
   }
 
@@ -162,10 +205,10 @@ export default function LeavePage() {
                 <TableRow>
                   <TableHead>Staff Member</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>End Date</TableHead>
+                  <TableHead>Dates</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead>Submitted</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -176,31 +219,46 @@ export default function LeavePage() {
                       {req.staffFirstName} {req.staffLastName}
                     </TableCell>
                     <TableCell>{leaveTypeLabels[req.leaveType] || req.leaveType}</TableCell>
-                    <TableCell>{req.startDate}</TableCell>
-                    <TableCell>{req.endDate}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {req.startDate} — {req.endDate}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {calcDays(req.startDate, req.endDate)}d
+                    </TableCell>
                     <TableCell>
                       <Badge variant={statusColors[req.status]}>{req.status}</Badge>
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate">{req.notes}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {new Date(req.submittedAt).toLocaleDateString()}
+                    </TableCell>
                     <TableCell>
-                      {req.status === "pending" && (
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => handleStatusChange(req.id, "approved")}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleStatusChange(req.id, "denied")}
-                          >
-                            Deny
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-1">
+                        {req.status === "pending" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => handleApprove(req.id)}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => { setDenyTarget(req); setDenialReason(""); setDenyError(""); }}
+                            >
+                              Deny
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDetailRequest(req)}
+                        >
+                          View
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -210,6 +268,122 @@ export default function LeavePage() {
         </CardContent>
       </Card>
 
+      {/* Detail Dialog */}
+      <Dialog open={!!detailRequest} onOpenChange={(open) => { if (!open) setDetailRequest(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Leave Request Detail</DialogTitle>
+          </DialogHeader>
+          {detailRequest && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <span className="font-medium text-muted-foreground">Staff</span>
+                <span>{detailRequest.staffFirstName} {detailRequest.staffLastName}</span>
+
+                <span className="font-medium text-muted-foreground">Type</span>
+                <span>{leaveTypeLabels[detailRequest.leaveType] || detailRequest.leaveType}</span>
+
+                <span className="font-medium text-muted-foreground">Dates</span>
+                <span>
+                  {detailRequest.startDate} — {detailRequest.endDate}
+                  <span className="ml-2 text-muted-foreground">
+                    ({calcDays(detailRequest.startDate, detailRequest.endDate)} days)
+                  </span>
+                </span>
+
+                <span className="font-medium text-muted-foreground">Status</span>
+                <Badge variant={statusColors[detailRequest.status]} className="w-fit">
+                  {detailRequest.status}
+                </Badge>
+
+                <span className="font-medium text-muted-foreground">Submitted</span>
+                <span>{new Date(detailRequest.submittedAt).toLocaleString()}</span>
+
+                {detailRequest.status === "approved" && detailRequest.approvedAt && (
+                  <>
+                    <span className="font-medium text-muted-foreground">Approved</span>
+                    <span>{new Date(detailRequest.approvedAt).toLocaleString()}</span>
+                    {detailRequest.approvedBy && (
+                      <>
+                        <span className="font-medium text-muted-foreground">Approved By</span>
+                        <span>{detailRequest.approvedBy}</span>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {detailRequest.status === "denied" && detailRequest.denialReason && (
+                  <>
+                    <span className="font-medium text-muted-foreground">Denial Reason</span>
+                    <span className="text-destructive">{detailRequest.denialReason}</span>
+                  </>
+                )}
+              </div>
+
+              {(detailRequest.notes || detailRequest.reason) && (
+                <div className="rounded-md border p-3">
+                  <p className="mb-1 font-medium text-muted-foreground">Notes</p>
+                  <p className="text-sm">{detailRequest.notes || detailRequest.reason}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Deny Dialog */}
+      <Dialog
+        open={!!denyTarget}
+        onOpenChange={(open) => {
+          if (!open) { setDenyTarget(null); setDenialReason(""); setDenyError(""); }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Deny Leave Request</DialogTitle>
+          </DialogHeader>
+          {denyTarget && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Denying{" "}
+                <span className="font-medium text-foreground">
+                  {denyTarget.staffFirstName} {denyTarget.staffLastName}
+                </span>
+                {" "}— {leaveTypeLabels[denyTarget.leaveType] || denyTarget.leaveType},{" "}
+                {denyTarget.startDate} to {denyTarget.endDate} ({calcDays(denyTarget.startDate, denyTarget.endDate)} days).
+              </p>
+              <div>
+                <Label>
+                  Denial Reason <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  value={denialReason}
+                  onChange={(e) => { setDenialReason(e.target.value); setDenyError(""); }}
+                  placeholder="Explain why this request is being denied (required for the audit trail)..."
+                  rows={3}
+                  className="mt-1"
+                />
+                {denyError && (
+                  <p className="mt-1 text-xs text-destructive">{denyError}</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { setDenyTarget(null); setDenialReason(""); setDenyError(""); }}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDenySubmit}>
+                  Confirm Denial
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* New Leave Request Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>

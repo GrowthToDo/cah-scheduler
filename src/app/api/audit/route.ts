@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { exceptionLog } from "@/db/schema";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, gte, lte } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -11,7 +11,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const entityType = searchParams.get("entityType");
   const action = searchParams.get("action");
-  const limit = parseInt(searchParams.get("limit") ?? "50");
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  const limit = parseInt(searchParams.get("limit") ?? "100");
 
   const query = db.select().from(exceptionLog);
 
@@ -21,6 +23,13 @@ export async function GET(request: Request) {
   }
   if (action) {
     conditions.push(eq(exceptionLog.action, action as ActionType));
+  }
+  if (from) {
+    conditions.push(gte(exceptionLog.createdAt, from));
+  }
+  if (to) {
+    // Include all records up to end of the "to" day
+    conditions.push(lte(exceptionLog.createdAt, `${to}T23:59:59`));
   }
 
   const logs =

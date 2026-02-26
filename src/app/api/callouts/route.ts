@@ -1,9 +1,11 @@
 import { db } from "@/db";
 import { callout, assignment, staff, shift, shiftDefinition } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, alias } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { logAuditEvent } from "@/lib/audit/logger";
 import { getEscalationOptions } from "@/lib/callout/escalation";
+
+const replacementStaffAlias = alias(staff, "replacement_staff");
 
 export async function GET() {
   const callouts = db
@@ -19,11 +21,20 @@ export async function GET() {
       replacementSource: callout.replacementSource,
       status: callout.status,
       resolvedAt: callout.resolvedAt,
+      resolvedBy: callout.resolvedBy,
+      escalationStepsTaken: callout.escalationStepsTaken,
       staffFirstName: staff.firstName,
       staffLastName: staff.lastName,
+      replacementFirstName: replacementStaffAlias.firstName,
+      replacementLastName: replacementStaffAlias.lastName,
+      shiftDate: shift.date,
+      shiftName: shiftDefinition.name,
     })
     .from(callout)
     .innerJoin(staff, eq(callout.staffId, staff.id))
+    .leftJoin(replacementStaffAlias, eq(callout.replacementStaffId, replacementStaffAlias.id))
+    .innerJoin(shift, eq(callout.shiftId, shift.id))
+    .innerJoin(shiftDefinition, eq(shift.shiftDefinitionId, shiftDefinition.id))
     .orderBy(callout.createdAt)
     .all();
 
@@ -52,11 +63,17 @@ export async function POST(request: Request) {
     .returning()
     .get();
 
+  const calledOutStaff = db.select({ firstName: staff.firstName, lastName: staff.lastName })
+    .from(staff).where(eq(staff.id, body.staffId)).get();
+  const calledOutName = calledOutStaff
+    ? `${calledOutStaff.firstName} ${calledOutStaff.lastName}`
+    : body.staffId;
+
   logAuditEvent({
     entityType: "callout",
     entityId: newCallout.id,
     action: "callout_logged",
-    description: `Callout logged for staff ${body.staffId}, reason: ${body.reason}`,
+    description: `Callout logged for ${calledOutName} (${body.reason})`,
     newState: newCallout as unknown as Record<string, unknown>,
   });
 

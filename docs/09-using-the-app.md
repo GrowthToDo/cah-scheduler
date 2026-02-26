@@ -333,9 +333,9 @@ Candidates are found in this order (escalation ladder):
 
 ### What You'll See
 
-- **Callout List** - All recorded callouts
-- **Status** - Open, Filled, Unfilled Approved
-- **Details** - Who, when, why, replacement
+- **Callout History** — One row per callout showing: staff name, shift date and type, reason, called-out timestamp, replacement name, replacement source, and status
+- **Open callouts** — Shown at the top of the count; have a "Find Replacement" button
+- **Resolved callouts** — Have a "View" button to open the full detail record
 
 ### Common Tasks
 
@@ -344,7 +344,7 @@ Candidates are found in this order (escalation ladder):
 | Log a new callout | Click "Log Callout" |
 | Find replacement for an open callout | Click "Find Replacement" on that row |
 | Mark as filled | Assign replacement staff in the escalation dialog |
-| Close without fill | Mark "Unfilled Approved" with justification |
+| View a resolved callout's full record | Click "View" on any filled or closed row |
 
 ### Logging a Callout
 
@@ -358,7 +358,11 @@ Candidates are found in this order (escalation ladder):
 
 ### Finding a Replacement for an Existing Callout
 
-If you closed the replacement dialog (for example, to check the schedule grid for rest-hour conflicts), the candidates are not lost. Each open callout row in the history table has a **Find Replacement** button that re-fetches and reopens the escalation dialog with fresh candidates.
+If you closed the replacement dialog (for example, to check the schedule grid for rest-hour conflicts), the candidates are not lost. Each open callout row has a **Find Replacement** button that re-fetches and reopens the escalation dialog with fresh candidates.
+
+### Viewing a Resolved Callout
+
+Click **View** on any filled callout to see the complete record: shift date and type, reason and any detail notes, replacement nurse's full name, source (Float Pool, Overtime, etc.), resolved timestamp, and any escalation steps that were attempted before the slot was filled.
 
 ---
 
@@ -368,9 +372,9 @@ If you closed the replacement dialog (for example, to check the schedule grid fo
 
 ### What You'll See
 
-- **Request List** - All leave requests
-- **Status Filters** - All, Pending, Approved, Denied
-- **Request Details** - Who, dates, type, status
+- **Request List** — Staff name, leave type, date range, duration in days, submission date, and status
+- **Status Filters** — All, Pending, Approved, Denied
+- **View button** on every row to open the full request detail
 
 ### Common Tasks
 
@@ -378,7 +382,8 @@ If you closed the replacement dialog (for example, to check the schedule grid fo
 |------|--------|
 | See pending requests | Click "Pending" filter |
 | Approve a request | Click "Approve" button |
-| Deny a request | Click "Deny" button |
+| Deny a request | Click "Deny" — a dialog opens requiring a written reason |
+| View full details of any request | Click "View" on the row |
 | Create request for staff | Click "New Leave Request" |
 
 ### Approving/Denying
@@ -389,8 +394,13 @@ If you closed the replacement dialog (for example, to check the schedule grid fo
 - Is this a blackout period?
 
 **When denying:**
-- Provide a reason (staff will see it)
-- Be consistent in your criteria
+- A written denial reason is **required** — the dialog will not let you confirm without one
+- The reason is saved permanently to the record and the audit trail
+- Be specific and consistent (e.g., "Short-staffed on 3/10 — already 2 people off")
+
+### Viewing Request Details
+
+Click **View** on any request to see: submission timestamp, leave type and date range with day count, current status, approval timestamp and approver (if approved), or denial reason (if denied), and any notes from the original request.
 
 ---
 
@@ -546,25 +556,28 @@ If no target staff was selected, approving the request:
 
 ### What You'll See
 
-- **Event List** - Every action taken in the system
-- **Details** - Who, what, when
-- **Entity** - What was affected (assignment, rule, etc.)
-- **Action** - What happened (created, updated, etc.)
+- **Event List** — Every action taken in the system, newest first
+- **Action badge** — Color-coded (red = callout/deletion/denial, green = filled/approved, grey = routine)
+- **Entity** — What was affected: assignment, callout, leave, swap, schedule, etc.
+- **Description** — Human-readable summary using staff names (not IDs)
+- **Performed By** — Who took the action (or "system" for automatic actions)
 
 ### Common Tasks
 
 | Task | How To |
 |------|--------|
-| Find a specific change | Use filters |
-| See who made a change | Check "Performed By" column |
-| View change details | Click on an entry |
+| Find events for a specific entity type | Use the **Entity** filter (Callouts, Leave, Swaps, etc.) |
+| Find a specific action | Use the **Action** filter |
+| Narrow to a date range | Set the **From** and **To** date pickers, then click Clear to reset |
+| Download for a staffing committee | Click **Export CSV** in the top-right corner |
 
 ### Why Use Audit Trail?
 
-- **Compliance** - Prove you followed procedures
-- **Troubleshooting** - "What happened to Maria's shift?"
-- **Accountability** - Track who made decisions
-- **Disputes** - "I was scheduled for X, not Y"
+- **Compliance** — Prove you followed procedures; all callout, leave, and manual assignment decisions are logged automatically
+- **Troubleshooting** — "What happened to Maria's shift on the 10th?"
+- **Accountability** — Track who made each decision and when
+- **Disputes** — "Why was my leave denied?" — the denial reason is in the trail
+- **Staffing committee** — Export to CSV for meeting review
 
 ---
 

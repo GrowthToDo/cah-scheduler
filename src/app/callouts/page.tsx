@@ -28,6 +28,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+interface EscalationStep {
+  step: string;
+  attempted: boolean;
+  result: string;
+  timestamp: string;
+}
+
 interface CalloutRecord {
   id: string;
   assignmentId: string;
@@ -40,8 +47,14 @@ interface CalloutRecord {
   replacementSource: string | null;
   status: string;
   resolvedAt: string | null;
+  resolvedBy: string | null;
+  escalationStepsTaken: EscalationStep[] | null;
   staffFirstName: string;
   staffLastName: string;
+  replacementFirstName: string | null;
+  replacementLastName: string | null;
+  shiftDate: string | null;
+  shiftName: string | null;
 }
 
 interface ReplacementCandidate {
@@ -100,6 +113,7 @@ export default function CalloutsPage() {
   const [loading, setLoading] = useState(true);
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [escalationDialogOpen, setEscalationDialogOpen] = useState(false);
+  const [detailCallout, setDetailCallout] = useState<CalloutRecord | null>(null);
   const [escalationOptions, setEscalationOptions] = useState<ReplacementCandidate[]>([]);
   const [chargeNurseRequired, setChargeNurseRequired] = useState(false);
   const [activeCalloutId, setActiveCalloutId] = useState<string | null>(null);
@@ -237,6 +251,7 @@ export default function CalloutsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Staff</TableHead>
+                  <TableHead>Shift</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Called Out</TableHead>
                   <TableHead>Replacement</TableHead>
@@ -250,17 +265,30 @@ export default function CalloutsPage() {
                     <TableCell className="font-medium">
                       {c.staffFirstName} {c.staffLastName}
                     </TableCell>
-                    <TableCell>{reasonLabels[c.reason] ?? c.reason}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {c.shiftDate
+                        ? new Date(c.shiftDate).toLocaleDateString()
+                        : "—"}
+                      {c.shiftName ? ` · ${c.shiftName}` : ""}
+                    </TableCell>
+                    <TableCell>
+                      {reasonLabels[c.reason] ?? c.reason}
+                      {c.reasonDetail && (
+                        <p className="text-xs text-muted-foreground">{c.reasonDetail}</p>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(c.calledOutAt).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      {c.replacementStaffId ? "Filled" : "-"}
+                      {c.replacementFirstName
+                        ? `${c.replacementFirstName} ${c.replacementLastName}`
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       {c.replacementSource
                         ? sourceLabels[c.replacementSource] ?? c.replacementSource
-                        : "-"}
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -284,6 +312,15 @@ export default function CalloutsPage() {
                             Find Replacement
                           </Button>
                         )}
+                        {c.status !== "open" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDetailCallout(c)}
+                          >
+                            View
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -293,6 +330,86 @@ export default function CalloutsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Callout Detail Dialog */}
+      <Dialog open={!!detailCallout} onOpenChange={(open) => { if (!open) setDetailCallout(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Callout Detail</DialogTitle>
+          </DialogHeader>
+          {detailCallout && (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <span className="font-medium text-muted-foreground">Staff</span>
+                <span>{detailCallout.staffFirstName} {detailCallout.staffLastName}</span>
+
+                <span className="font-medium text-muted-foreground">Shift</span>
+                <span>
+                  {detailCallout.shiftDate
+                    ? new Date(detailCallout.shiftDate).toLocaleDateString()
+                    : "—"}
+                  {detailCallout.shiftName ? ` — ${detailCallout.shiftName}` : ""}
+                </span>
+
+                <span className="font-medium text-muted-foreground">Reason</span>
+                <span>
+                  {reasonLabels[detailCallout.reason] ?? detailCallout.reason}
+                  {detailCallout.reasonDetail && (
+                    <span className="block text-muted-foreground">{detailCallout.reasonDetail}</span>
+                  )}
+                </span>
+
+                <span className="font-medium text-muted-foreground">Called Out</span>
+                <span>{new Date(detailCallout.calledOutAt).toLocaleString()}</span>
+
+                <span className="font-medium text-muted-foreground">Replacement</span>
+                <span>
+                  {detailCallout.replacementFirstName
+                    ? `${detailCallout.replacementFirstName} ${detailCallout.replacementLastName}`
+                    : "—"}
+                </span>
+
+                <span className="font-medium text-muted-foreground">Source</span>
+                <span>
+                  {detailCallout.replacementSource
+                    ? sourceLabels[detailCallout.replacementSource] ?? detailCallout.replacementSource
+                    : "—"}
+                </span>
+
+                {detailCallout.resolvedAt && (
+                  <>
+                    <span className="font-medium text-muted-foreground">Resolved</span>
+                    <span>{new Date(detailCallout.resolvedAt).toLocaleString()}</span>
+                  </>
+                )}
+
+                {detailCallout.resolvedBy && (
+                  <>
+                    <span className="font-medium text-muted-foreground">Resolved By</span>
+                    <span>{detailCallout.resolvedBy}</span>
+                  </>
+                )}
+              </div>
+
+              {detailCallout.escalationStepsTaken && detailCallout.escalationStepsTaken.length > 0 && (
+                <div>
+                  <p className="mb-1 font-medium text-muted-foreground">Escalation Steps</p>
+                  <ul className="space-y-1 rounded-md border p-2">
+                    {detailCallout.escalationStepsTaken.map((step, i) => (
+                      <li key={i} className="flex items-center justify-between text-xs">
+                        <span>{step.step}</span>
+                        <Badge variant={step.result === "filled" ? "default" : "secondary"} className="text-[10px]">
+                          {step.result}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Log Callout Dialog */}
       <Dialog open={logDialogOpen} onOpenChange={(open) => {

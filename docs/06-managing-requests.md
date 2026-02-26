@@ -118,9 +118,9 @@ The 7-day threshold can be configured per unit.
 
 ### What Happens When Leave Is Denied?
 
-1. **Staff is notified** - They see their request was denied
-2. **Reason provided** - Manager explains why (e.g., "Too many people already off")
-3. **Staff can resubmit** - Maybe different dates would work
+1. **Denial reason required** — A written reason must be entered before the denial can be saved. This is not optional.
+2. **Record is permanent** — The reason is stored on the leave record and written to the audit trail. It cannot be removed later.
+3. **Staff can resubmit** — If the denial was date-specific (e.g., "Too many people off that week"), staff may resubmit for different dates.
 
 ### Who Can Approve Leave?
 
@@ -312,14 +312,18 @@ Managers can see:
 ### Leave Management Page (`/leave`)
 
 **What you see:**
-- List of all leave requests
-- Filter by status (Pending, Approved, Denied)
-- Staff name, dates, leave type
+- List of all leave requests, filtered by All / Pending / Approved / Denied
+- Staff name, leave type, date range, day count, submission date, and status
+- A **View** button on every row to see full request details
 
 **What you can do:**
-- **Create** a new leave request (on behalf of staff)
-- **Approve** pending requests
-- **Deny** pending requests
+- **Create** a new leave request on behalf of staff
+- **Approve** pending requests — coverage workflow triggers automatically
+- **Deny** pending requests — a dialog opens requiring a written denial reason before the denial can be confirmed; the reason is saved to the record and the audit trail
+- **View** any request (pending, approved, or denied) to see the complete detail: submission time, approval/denial timestamp, approver name, denial reason, and full notes
+
+**Why denial reasons are required:**
+A written reason protects the hospital from fairness disputes. Staff have a right to know why their request was turned down, and the reason becomes part of the permanent audit trail.
 
 ### Shift Swaps Page (`/swaps`)
 

@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { staffLeave, staff } from "@/db/schema";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { logAuditEvent } from "@/lib/audit/logger";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -42,6 +43,11 @@ export async function GET(request: Request) {
       endDate: staffLeave.endDate,
       status: staffLeave.status,
       notes: staffLeave.notes,
+      reason: staffLeave.reason,
+      submittedAt: staffLeave.submittedAt,
+      approvedAt: staffLeave.approvedAt,
+      approvedBy: staffLeave.approvedBy,
+      denialReason: staffLeave.denialReason,
       createdAt: staffLeave.createdAt,
     })
     .from(staffLeave)
@@ -72,6 +78,20 @@ export async function POST(request: Request) {
     })
     .returning()
     .get();
+
+  const staffRecord = db.select({ firstName: staff.firstName, lastName: staff.lastName })
+    .from(staff).where(eq(staff.id, body.staffId)).get();
+  const staffName = staffRecord
+    ? `${staffRecord.firstName} ${staffRecord.lastName}`
+    : body.staffId;
+
+  logAuditEvent({
+    entityType: "leave",
+    entityId: newLeave.id,
+    action: "leave_requested",
+    description: `Leave requested for ${staffName}: ${body.leaveType} from ${body.startDate} to ${body.endDate}`,
+    newState: newLeave as unknown as Record<string, unknown>,
+  });
 
   return NextResponse.json(newLeave, { status: 201 });
 }

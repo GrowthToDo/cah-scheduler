@@ -230,18 +230,23 @@ The scheduler helps by showing:
 
 ### What You See
 
-- List of all callouts (recent and historical)
-- Which shift was affected
-- Who called out and why
-- Replacement details (if found)
-- Status (Open, Filled, Unfilled Approved)
+The callout history table shows one row per callout with:
+
+| Column | What It Shows |
+|--------|---------------|
+| **Staff** | Who called out |
+| **Shift** | Date and shift type (Day, Night, etc.) |
+| **Reason** | Why they called out, with any extra detail below |
+| **Called Out** | Date and time the callout was logged |
+| **Replacement** | Full name of the nurse who covered (or "—" if open) |
+| **Source** | How they were found — Float Pool, Overtime, Agency, etc. |
+| **Status** | Open / Filled / Unfilled Approved |
 
 ### What You Can Do
 
-1. **Log a callout** - Record when someone can't come
-2. **Track escalation** - Document who you called
-3. **Assign replacement** - Mark who's covering
-4. **Close the callout** - Mark as filled or unfilled
+1. **Log a callout** — Record when someone can't come in
+2. **Find replacement** — Opens the escalation dialog for any open callout
+3. **View details** — Click the **View** button on any resolved callout to see the full record: shift, reason, replacement, resolved timestamp, and any escalation steps that were tried
 
 ---
 

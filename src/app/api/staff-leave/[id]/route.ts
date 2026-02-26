@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { staffLeave, exceptionLog, assignment, shift, schedule, unit, openShift, callout } from "@/db/schema";
+import { staffLeave, exceptionLog, assignment, shift, schedule, unit, openShift, callout, staff } from "@/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { findCandidatesForShift } from "@/lib/coverage/find-candidates";
@@ -35,6 +35,14 @@ export async function PUT(
     return NextResponse.json({ error: "Leave not found" }, { status: 404 });
   }
 
+  // Denial reason is required when denying a leave request
+  if (body.status === "denied" && !body.denialReason?.trim()) {
+    return NextResponse.json(
+      { error: "A denial reason is required when denying a leave request." },
+      { status: 400 }
+    );
+  }
+
   const updated = db
     .update(staffLeave)
     .set({
@@ -59,14 +67,24 @@ export async function PUT(
     };
     const action = actionMap[body.status] ?? "updated";
 
+    const staffRecord = db.select({ firstName: staff.firstName, lastName: staff.lastName })
+      .from(staff).where(eq(staff.id, existing.staffId)).get();
+    const staffName = staffRecord
+      ? `${staffRecord.firstName} ${staffRecord.lastName}`
+      : existing.staffId;
+
+    const descriptionSuffix = body.status === "denied" && body.denialReason
+      ? ` — Reason: ${body.denialReason}`
+      : "";
+
     db.insert(exceptionLog)
       .values({
         entityType: "leave",
         entityId: id,
         action,
-        description: `Leave request ${body.status} for staff ${existing.staffId}`,
+        description: `Leave ${body.status} for ${staffName} (${existing.leaveType}, ${existing.startDate} to ${existing.endDate})${descriptionSuffix}`,
         previousState: { status: existing.status },
-        newState: { status: body.status },
+        newState: { status: body.status, denialReason: body.denialReason },
         performedBy: body.approvedBy || "nurse_manager",
       })
       .run();
