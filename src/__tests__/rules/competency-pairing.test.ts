@@ -44,7 +44,7 @@ describe("level1-preceptor rule", () => {
     expect(violations).toHaveLength(1);
     expect(violations[0].ruleId).toBe("level1-preceptor");
     expect(violations[0].staffId).toBe("novice");
-    expect(violations[0].description).toContain("Level 5 preceptor");
+    expect(violations[0].description).toContain("Level 5+ preceptor");
   });
 
   it("flags level-1 staff working alone", () => {
