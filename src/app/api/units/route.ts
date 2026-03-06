@@ -1,10 +1,28 @@
 import { db } from "@/db";
-import { unit } from "@/db/schema";
+import { unit, staff } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const allUnits = db.select().from(unit).orderBy(unit.name).all();
-  return NextResponse.json(allUnits);
+
+  // Count active staff per unit by homeUnit name (homeUnit is a text field, not a FK)
+  const activeStaff = db
+    .select({ homeUnit: staff.homeUnit })
+    .from(staff)
+    .where(eq(staff.isActive, true))
+    .all();
+
+  const staffCountByUnit: Record<string, number> = {};
+  for (const s of activeStaff) {
+    if (s.homeUnit) {
+      staffCountByUnit[s.homeUnit] = (staffCountByUnit[s.homeUnit] ?? 0) + 1;
+    }
+  }
+
+  return NextResponse.json(
+    allUnits.map((u) => ({ ...u, staffCount: staffCountByUnit[u.name] ?? 0 }))
+  );
 }
 
 export async function POST(request: Request) {

@@ -8,7 +8,15 @@
 
 The CAH Scheduler is a web application. You access it through a browser (Chrome, Safari, Firefox, etc.).
 
-**Main navigation:** A sidebar on the left shows all available pages.
+**Main navigation:** A sidebar on the left shows all available pages, organized into groups:
+
+| Group | Pages |
+|-------|-------|
+| *(top)* | Dashboard |
+| **Scheduling** | Schedule, Census, Schedule Variants |
+| **Daily Management** | Callouts, Open Shifts, Leave, Shift Swaps, PRN Availability |
+| **Configuration** | Staff, Rules, Units, Holidays |
+| **System** | Import / Export, Audit Trail |
 
 ---
 
@@ -18,7 +26,7 @@ Here's every page in the application and what you can do on each.
 
 ---
 
-## Setup (`/setup`)
+## Import / Export (`/setup`)
 
 **Purpose:** Import and export your hospital's data via Excel spreadsheet.
 
@@ -96,6 +104,13 @@ Here's every page in the application and what you can do on each.
 | Import | Click "Import Data" after preview looks good |
 | Start over | Click "Remove" on uploaded file |
 
+### After a Successful Import
+
+When import completes, the page shows a success screen with:
+- **"Create Your First Schedule →"** — the recommended next step
+- **"Review Staff"** — verify the imported roster
+- **"Import Another File"** — start over with a different file
+
 ### Important Notes
 
 - **Data Reset**: Importing REPLACES all existing data with the uploaded file
@@ -111,18 +126,24 @@ Here's every page in the application and what you can do on each.
 
 ### What You'll See
 
-- **Schedule Summary** - Current schedule status (draft/published)
-- **Coverage Alerts** - Shifts that need attention
-- **Pending Items** - Leave requests, swaps waiting for approval
-- **Quick Stats** - Staff count, upcoming shifts, etc.
+- **Current Schedule card** — Full-width card at the top showing the active schedule name, status, date range, and fill rate. Includes a direct button to open the Schedule Builder.
+- **Getting Started checklist** — Appears on first use (amber card) until three setup steps are complete: import staff, configure units, create a schedule. Dismissible once you've read it.
+- **Needs Attention** — Live alert row that flags items requiring action:
+  - Pending leave requests
+  - Open shifts needing coverage
+  - PRN staff who haven't submitted availability
+  - Current schedule ending within 7 days (when no next period exists yet)
+- **Metric cards** — Staff count, fill rate, understaffed shifts, open callouts, and more.
 
 ### Common Tasks
 
 | Task | How To |
 |------|--------|
-| See today's coverage | Check the "Today" section |
-| Review pending requests | Look at "Pending Items" |
-| Jump to a problem | Click any alert to go to details |
+| Open the current schedule | Click "Open Schedule Builder →" on the schedule card |
+| Create your first schedule | Click "Create Schedule →" on the schedule card |
+| Follow the setup guide | Check the Getting Started card (amber) |
+| Jump to an alert | Click any item in the Needs Attention row |
+| Dismiss the checklist | Click the × on the Getting Started card |
 
 ---
 
@@ -200,14 +221,25 @@ When you click any shift in the grid, a dialog opens showing:
 
 If a shift requires a charge nurse, eligible charge nurses (Level 4+) show an **Assign as Charge** button instead of the plain Assign button.
 
+### Creating a New Schedule
+
+When you click **New Schedule**, a dialog opens where you:
+1. Enter a name (e.g., "ICU — Feb/Mar 2026")
+2. Set the start and end dates
+3. Select a unit from the dropdown
+
+The unit dropdown shows the **staff count** for each unit. If a unit has no active staff, a red error appears and the **Create Schedule** button is disabled — import your roster from Import / Export first. If a unit has fewer than 5 staff, a yellow caution note is shown.
+
+The dialog defaults to the unit used in your most recent non-archived schedule, so returning users don't have to re-select it every time.
+
 ### Schedule Workflow
 
 ```
-1. Create new schedule (set date range)
+1. Create new schedule (set date range and unit)
         ↓
 2. Click "Generate Schedule" → system builds 3 variants automatically
         ↓
-3. Go to Scenarios page, compare variants and Apply your preferred one
+3. Go to Schedule Variants page, compare variants and Apply your preferred one
         ↓
 4. Return here and review the applied schedule
         ↓
@@ -274,7 +306,7 @@ Once you save a census tier for a shift:
 
 ---
 
-## Scenarios (`/scenarios`)
+## Schedule Variants (`/scenarios`)
 
 **Purpose:** Generate and compare different scheduling options, then choose the best one.
 
@@ -345,7 +377,7 @@ When you click a staff member's **name** (not the edit button), a calendar opens
 
 ---
 
-## Coverage (`/open-shifts`)
+## Open Shifts (`/open-shifts`)
 
 **Purpose:** Review and approve replacement candidates for shifts needing coverage.
 
@@ -651,9 +683,9 @@ If no target staff was selected, approving the request:
 
 ```
 1. Go to Schedule page
-2. Create new schedule (set dates)
+2. Create new schedule (set dates and unit — dropdown shows staff count)
 3. Click "Generate Schedule" — system builds 3 variants in background
-4. Go to Scenarios page when generation completes
+4. Go to Schedule Variants page when generation completes
 5. Review score cards; click "Apply" on your preferred variant
 6. Return to Schedule, make any manual adjustments
 7. Click "Publish"
@@ -695,7 +727,7 @@ If no target staff was selected, approving the request:
 6. Click "Approve" to validate and perform the swap
    - If hard rules violated → dialog lists issues, swap blocked
    - If clean → assignments are swapped automatically
-   - If open swap → Coverage Request created on Coverage page
+   - If open swap → Coverage Request created on Open Shifts page
 ```
 
 ---
@@ -730,21 +762,28 @@ If no target staff was selected, approving the request:
 
 The application is organized around your workflow:
 
-1. **Setup** - Import data from Excel (first-time setup)
-2. **Dashboard** - Your starting point
-3. **Staff** - Who you're scheduling (click names for calendar view)
-4. **Schedule** - The main event; use "Generate Schedule" to auto-build, click issue badges for details
-5. **Census** - Set daily patient census tier (Blue/Green/Yellow/Red) per shift — drives staffing requirements
-6. **Scenarios** - Generate 3 variants, compare scores, Apply your preferred one
-7. **Callouts** - Handle absences
-8. **Coverage** - Review and approve replacement candidates
-9. **Leave** - Time-off requests (cancels assignments and shows Leave badge in grid when approved)
-10. **Swaps** - Shift trades
-11. **Availability** - PRN scheduling
+**Scheduling**
+1. **Import / Export** - Import data from Excel (first-time setup)
+2. **Dashboard** - Your starting point; follow the Getting Started checklist on first use
+3. **Schedule** - The main event; use "Generate Schedule" to auto-build, click issue badges for details
+4. **Census** - Set daily patient census tier (Blue/Green/Yellow/Red) per shift — drives staffing requirements
+5. **Schedule Variants** - Generate 3 variants, compare scores, Apply your preferred one
+
+**Daily Management**
+6. **Callouts** - Handle same-day absences
+7. **Open Shifts** - Review and approve replacement candidates
+8. **Leave** - Time-off requests (cancels assignments and shows Leave badge in grid when approved)
+9. **Shift Swaps** - Shift trades
+10. **PRN Availability** - PRN scheduling
+
+**Configuration**
+11. **Staff** - Who you're scheduling (click names for calendar view)
 12. **Rules** - Scheduling constraints (Census Bands tab is editable inline)
 13. **Units** - Department configuration
 14. **Holidays** - Special days
-15. **Audit** - Change history
+
+**System**
+15. **Audit Trail** - Complete change history
 
 Navigate using the sidebar, and you'll find what you need!
 

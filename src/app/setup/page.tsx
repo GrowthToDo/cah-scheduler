@@ -369,16 +369,24 @@ export default function SetupPage() {
                 <h3 className="text-lg font-semibold text-green-600 mb-2">
                   Import Successful!
                 </h3>
-                <p className="text-muted-foreground mb-4">
-                  Imported {result.imported?.staff} staff, {result.imported?.units} units, and {result.imported?.holidays} holidays
+                <p className="text-muted-foreground mb-1">
+                  Imported {result.imported?.staff} staff, {result.imported?.units} units, and {result.imported?.holidays} holidays.
                 </p>
-                <div className="flex gap-3 justify-center">
-                  <Button onClick={() => window.location.href = "/staff"}>
-                    View Staff
+                <p className="text-sm text-muted-foreground mb-6">
+                  Ready to build your first schedule?
+                </p>
+                <div className="flex flex-col items-center gap-2">
+                  <Button onClick={() => window.location.href = "/schedule"}>
+                    Create Your First Schedule →
                   </Button>
-                  <Button variant="outline" onClick={resetForm}>
-                    Import Another
-                  </Button>
+                  <div className="flex gap-3 mt-1">
+                    <Button variant="outline" onClick={() => window.location.href = "/staff"}>
+                      Review Staff
+                    </Button>
+                    <Button variant="ghost" onClick={resetForm}>
+                      Import Another File
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (

@@ -6,6 +6,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.6.0] - 2026-03-06
+
+### Added
+
+- **Sidebar navigation reorganized into labeled groups** (`src/components/layout/sidebar.tsx`).
+
+  The flat 15-item list is now divided into five sections with visual group headers:
+  - *(no label)* — Dashboard
+  - **Scheduling** — Schedule, Census, Schedule Variants
+  - **Daily Management** — Callouts, Open Shifts, Leave, Shift Swaps, PRN Availability
+  - **Configuration** — Staff, Rules, Units, Holidays
+  - **System** — Import / Export, Audit Trail
+
+  Three items were also renamed to better reflect their purpose: "Scenarios" → **Schedule Variants**, "Coverage" → **Open Shifts**, "Setup" → **Import / Export**. The nav area gained `overflow-y-auto` so it scrolls if the window is short.
+
+- **Dashboard Getting Started checklist** (`src/app/dashboard/page.tsx`).
+
+  An amber guidance card appears for new installs until all three setup steps are complete:
+  1. Import your staff roster
+  2. Configure units & rules
+  3. Create a schedule period
+
+  Each step links directly to the relevant page and shows a checkmark when done. The card has a dismiss button that persists the choice in `localStorage`. It hides automatically once all steps are complete.
+
+- **Dashboard Needs Attention section** (`src/app/dashboard/page.tsx`).
+
+  A live alert row appears between the schedule card and the metric cards when any of the following are true:
+  - Pending leave requests awaiting approval (links to Leave page)
+  - Open shifts needing coverage (links to Open Shifts page)
+  - PRN staff who haven't submitted availability (links to PRN Availability page)
+  - Current schedule ending within 7 days with no next schedule created (links to Schedule page)
+
+- **Current schedule elevated to full-width card on Dashboard** (`src/app/dashboard/page.tsx`).
+
+  The current schedule card is now the first element on the page. When a schedule exists, it shows a primary **"Open Schedule Builder →"** button. When no schedule exists, it shows a **"Create Schedule →"** button. The duplicate "Open Schedule Builder" quick-link card was removed and quick links were consolidated to a 2-column grid.
+
+- **Unit staff count and warnings in the New Schedule dialog** (`src/app/schedule/page.tsx`, `src/app/api/units/route.ts`).
+
+  The unit dropdown in the New Schedule dialog now shows the staff count next to each unit name (e.g., "ICU — 33 staff"). Two guard conditions prevent accidental schedule creation for under-resourced units:
+  - **0 staff (red error)**: an inline error message explains the problem and links to Import / Export; the **Create Schedule** button is disabled.
+  - **1–4 staff (yellow caution)**: a warning note is shown but the button remains enabled.
+
+  The dialog now smart-defaults to the unit used in the most recent non-archived schedule, falling back to the first unit alphabetically. Previously it always defaulted to the first unit in the list.
+
+- **Empty state on Staff page** (`src/components/staff/staff-table.tsx`).
+
+  When no staff members exist (fresh install before import), the staff table now shows a friendly empty state with a link to Import / Export rather than an empty table.
+
+- **Post-import success screen CTA updated** (`src/app/setup/page.tsx`).
+
+  After a successful Excel import, the primary button is now **"Create Your First Schedule →"** rather than "Review Staff", guiding new users through the natural next step. "Review Staff" is retained as a secondary outline button.
+
+### Fixed
+
+- **Dashboard fill rate showing 148%** (`src/app/api/dashboard/route.ts`).
+
+  Two bugs compounded to produce inflated fill rates:
+  1. `totalSlots` used the shift definition's base `requiredStaffCount` (3 or 4), not the census-band-aware count (e.g., 5 for Green tier). Fixed by implementing the same 3-priority `getEffectiveRequired()` logic used in the schedule detail API.
+  2. `totalAssignments` counted all assignments including `status = "cancelled"` (leave) and `status = "called_out"` (callouts). Fixed by loading all assignments in a single `inArray` batch query and skipping cancelled and called-out statuses before counting.
+
+- **PRN missing count showing 5 instead of 1** (`src/app/api/dashboard/route.ts`).
+
+  The query filtered `prnAvailability` by `scheduleId = latestSchedule.id`, but all records imported via Excel use the fixed anchor `PRN_TEMPLATE_SCHEDULE_ID = "00000000-0000-0000-0000-000000000001"` — meaning no imported records ever matched. Fixed by removing the `scheduleId` filter and checking only whether a staff member has *any* prnAvailability record at all, which matches the behavior of the PRN Availability page.
+
+- **PRN Import Template appearing as "Current Schedule" on dashboard** (`src/app/api/dashboard/route.ts`).
+
+  The PRN Import Template schedule has `status = "archived"` but a far-future `startDate`, so it sorted first and was selected as the latest schedule. Fixed by adding `ne(schedule.status, "archived")` to the `latestSchedule` query.
+
+- **Getting Started checklist not appearing on first run** (`src/app/dashboard/page.tsx`, `src/app/api/dashboard/route.ts`).
+
+  Same root cause as the PRN Import Template bug: the archived template counted as an active schedule, so step 3 ("Create a schedule period") was already marked done — hiding the checklist before it was ever useful. The archived-schedule fix above resolves this.
+
+### Files Modified
+
+- `src/components/layout/sidebar.tsx` — navItems refactored into navGroups with section labels; three items renamed
+- `src/components/staff/staff-table.tsx` — empty state added
+- `src/app/setup/page.tsx` — post-import CTA hierarchy updated
+- `src/app/dashboard/page.tsx` — Getting Started checklist, Needs Attention section, schedule card elevated
+- `src/app/api/dashboard/route.ts` — fill rate fix, PRN count fix, archived-schedule exclusion, new counts added
+- `src/app/api/units/route.ts` — `staffCount` per unit added to GET response
+- `src/app/schedule/page.tsx` — unit staff count in dropdown, smart default unit, staff warnings
+
+---
+
 ## [1.5.7] - 2026-03-04
 
 ### Fixed

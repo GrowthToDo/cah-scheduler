@@ -51,6 +51,21 @@ export function StaffTable({
   onEdit: (id: string) => void;
   onNameClick?: (staff: { id: string; firstName: string; lastName: string }) => void;
 }) {
+  if (staff.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-muted-foreground">No staff members found.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Import your staff roster from{" "}
+          <a href="/setup" className="text-primary underline underline-offset-4">
+            Import / Export
+          </a>{" "}
+          to get started, or add staff manually using the button above.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <Table>
       <TableHeader>

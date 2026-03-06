@@ -37,6 +37,7 @@ interface Schedule {
 interface Unit {
   id: string;
   name: string;
+  staffCount: number;
 }
 
 export default function SchedulePage() {
@@ -71,7 +72,11 @@ export default function SchedulePage() {
     setName("");
     setStartDate("");
     setEndDate("");
-    setSelectedUnit(units[0]?.name ?? "");
+    // Default to unit from most recent non-archived schedule; fall back to first unit
+    const lastUnit = schedules
+      .filter((s) => s.status !== "archived")
+      .sort((a, b) => b.startDate.localeCompare(a.startDate))[0]?.unit;
+    setSelectedUnit(lastUnit ?? units[0]?.name ?? "");
     setError(null);
     setDialogOpen(true);
   }
@@ -209,7 +214,12 @@ export default function SchedulePage() {
                 <SelectContent>
                   {units.map((u) => (
                     <SelectItem key={u.id} value={u.name}>
-                      {u.name}
+                      <span className="flex items-center justify-between gap-4 w-full">
+                        <span>{u.name}</span>
+                        <span className={`text-xs ${u.staffCount === 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                          {u.staffCount} staff
+                        </span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -219,6 +229,26 @@ export default function SchedulePage() {
                   No units found. Import your data first via the Setup page.
                 </p>
               )}
+              {(() => {
+                const selected = units.find((u) => u.name === selectedUnit);
+                if (!selected) return null;
+                if (selected.staffCount === 0) {
+                  return (
+                    <p className="text-xs text-destructive">
+                      No active staff are assigned to {selected.name}. A schedule cannot be generated without staff. Go to{" "}
+                      <a href="/setup" className="underline">Import / Export</a> to load your roster first.
+                    </p>
+                  );
+                }
+                if (selected.staffCount < 5) {
+                  return (
+                    <p className="text-xs text-yellow-600">
+                      Only {selected.staffCount} staff assigned to {selected.name}. The generated schedule may be significantly understaffed.
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -228,7 +258,10 @@ export default function SchedulePage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={creating || units.length === 0}>
+            <Button
+              onClick={handleCreate}
+              disabled={creating || units.length === 0 || (units.find((u) => u.name === selectedUnit)?.staffCount ?? 1) === 0}
+            >
               {creating ? "Creating…" : "Create Schedule"}
             </Button>
           </DialogFooter>
