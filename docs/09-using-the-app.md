@@ -208,6 +208,12 @@ Required information:
 
 When you click any shift in the grid, a dialog opens showing:
 
+- **Flex-Home / VTO Suggestions** *(blue panel — only appears when overstaffed)* — if the census tier was reduced (e.g., to Blue) and there are more staff assigned than required, this panel lists which staff to offer flex-home or VTO first, in priority order, with a reason for each:
+  - Staff on overtime are listed first (sending them home stops the OT clock and saves payroll)
+  - Agency staff next (flex before permanent staff)
+  - PRN staff before full-time
+  - Lower-competency staff before higher-competency (keep your most experienced nurses on the floor)
+  - The charge nurse is never recommended regardless of other factors
 - **Currently Assigned** — everyone on this shift, with:
   - Badges for Charge, competency level, and **OT** (red) if this nurse's total hours for the week exceed 40h — the badge appears on every overtime shift, not just the first one
   - Hours worked this week *including* this shift — shown in amber if a part-time nurse is above their FTE target
@@ -301,6 +307,7 @@ Once you save a census tier for a shift:
 - The **Schedule grid** immediately shows the updated required count (e.g., "3/5 staff" instead of "3/4")
 - The **rule engine** evaluates staffing against the tier — if short, a hard violation badge appears
 - The **auto-scheduler** (when you generate a new schedule) fills to the tier's required count, not just the shift definition's baseline
+- If the tier is reduced (e.g., Green → Blue) and more staff are assigned than the tier requires, the shift cell shows a **blue border** and a **"+X excess" badge** — click the shift to see ranked flex-home / VTO suggestions
 
 ### Typical Workflow
 
@@ -593,19 +600,34 @@ If no target staff was selected, approving the request:
 
 ### What You'll See
 
-- **Rule List** - All hard and soft rules
-- **Type Badge** - Hard vs Soft
-- **Category** - Staffing, Rest, Fairness, etc.
-- **Status** - Active/Inactive
+- **Hard Rules** — Safety and legal rules that can never be violated; shown with configurable parameters
+- **Soft Rules** — Fairness and preference rules with adjustable penalty weights
+- **Always Active** badge — A few rules (e.g., no overlapping shifts) cannot be disabled
+
+### Configuring Hard Rule Parameters
+
+Hard rules have numeric thresholds and level requirements that you can adjust. Click **Edit** on any hard rule to open an inline editor:
+
+| Rule | What You Can Configure |
+|------|----------------------|
+| Minimum Rest Between Shifts | Minimum hours of rest (e.g., 10h) |
+| Maximum Consecutive Days | Max days in a row before a day off is required |
+| Maximum Hours (7-Day Rolling) | Max hours in any 7-day window |
+| ICU Competency Minimum | Minimum competency level to work ICU shifts |
+| Level 1 Must Have Preceptor | Minimum level the preceptor must be (default: Level 5) |
+| Level 2 ICU/ER Supervision | Minimum supervisor level (default: Level 4) |
+| On-Call Limits | Max on-call shifts per week; max on-call weekends per month |
+
+Values outside the recommended clinical range show an amber warning — you can still save, but the warning flags the deviation.
 
 ### Common Tasks
 
 | Task | How To |
 |------|--------|
 | View all rules | Open the page |
-| See rule details | Click on a rule |
-| Toggle rule on/off | Use active toggle |
-| Adjust parameters | Edit the rule |
+| Adjust a hard rule threshold | Click **Edit** on the rule row, change the value, click **Save** |
+| Toggle a soft rule on/off | Use the Active toggle |
+| Adjust soft rule penalty weight | Use the weight slider |
 
 ---
 
@@ -681,6 +703,22 @@ If no target staff was selected, approving the request:
 | Narrow to a date range | Set the **From** and **To** date pickers, then click Clear to reset |
 | See entries you just created without navigating away | Click **Refresh** in the top-right corner |
 | Download for a staffing committee | Click **Export CSV** in the top-right corner — downloads a UTF-8 Excel-compatible CSV with UTC timestamps |
+
+### What Gets Logged
+
+Every change is logged automatically — you do not need to do anything:
+
+| Action | What you see in the trail |
+|--------|--------------------------|
+| Manual assignment added | "Assigned Sarah Chen to Day Shift on 2026-03-06" |
+| Assignment removed | "Removed Sarah Chen from Day Shift on 2026-03-06" |
+| Census tier changed | "Census tier changed from green to blue for Day Shift (ICU) on 2026-03-06" |
+| Leave approved/denied | Staff name, dates, and decision |
+| Callout logged | Staff name, shift, reason |
+| Schedule generated | Variant names and job ID |
+| Rule override | Which rule was overridden and why |
+
+You can filter by **Entity** (Assignments, Shifts / Census, Leave, Callouts, etc.) or **Action** (Manual Assignment, Census Tier Changed, Leave Approved, etc.) to find specific events quickly.
 
 ### Why Use Audit Trail?
 

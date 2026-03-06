@@ -56,6 +56,9 @@ const actionLabels: Record<string, string> = {
   schedule_auto_generated: "Schedule Generated",
   open_shift_created: "Open Shift Created",
   open_shift_filled: "Open Shift Filled",
+  acuity_changed: "Census Tier Changed",
+  census_changed: "Census Count Changed",
+  assignment_cancelled_for_leave: "Assignment Cancelled (Leave)",
 };
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link";
@@ -72,6 +75,9 @@ const actionColors: Record<string, BadgeVariant> = {
   leave_approved: "default",
   leave_denied: "destructive",
   schedule_auto_generated: "secondary",
+  acuity_changed: "secondary",
+  census_changed: "secondary",
+  assignment_cancelled_for_leave: "destructive",
 };
 
 function csvField(value: string): string {
@@ -152,6 +158,7 @@ export default function AuditPage() {
             <SelectItem value="all">All Entities</SelectItem>
             <SelectItem value="assignment">Assignments</SelectItem>
             <SelectItem value="schedule">Schedules</SelectItem>
+            <SelectItem value="shift">Shifts / Census</SelectItem>
             <SelectItem value="callout">Callouts</SelectItem>
             <SelectItem value="leave">Leave</SelectItem>
             <SelectItem value="swap_request">Swaps</SelectItem>
@@ -176,6 +183,8 @@ export default function AuditPage() {
             <SelectItem value="leave_denied">Leave Denied</SelectItem>
             <SelectItem value="scenario_selected">Scenario Selected</SelectItem>
             <SelectItem value="override_hard_rule">Hard Rule Override</SelectItem>
+            <SelectItem value="acuity_changed">Census Tier Changed</SelectItem>
+            <SelectItem value="census_changed">Census Count Changed</SelectItem>
             <SelectItem value="swap_approved">Swap Approved</SelectItem>
             <SelectItem value="deleted">Deleted</SelectItem>
           </SelectContent>

@@ -120,6 +120,7 @@ export function ScheduleGrid({ shifts, onShiftClick, onViolationsClick, violatio
   );
 }
 
+
 function ShiftCell({
   shift,
   onClick,
@@ -137,6 +138,8 @@ function ShiftCell({
   const cancelledAssignments = shift.assignments.filter((a) => a.status === "cancelled");
   const staffCount = activeAssignments.length;
   const isFull = staffCount >= shift.requiredStaffCount;
+  const isOverstaffed = staffCount > shift.requiredStaffCount;
+  const excessCount = isOverstaffed ? staffCount - shift.requiredStaffCount : 0;
   const hasCharge = activeAssignments.some((a) => a.isChargeNurse);
   const hasHardViolations = violations.length > 0;
   const hasSoftViolations = softViolationCount > 0;
@@ -146,6 +149,8 @@ function ShiftCell({
     borderColor = "border-red-400";
   } else if (hasSoftViolations) {
     borderColor = "border-yellow-400";
+  } else if (isOverstaffed) {
+    borderColor = "border-blue-400";
   } else if (isFull && (!shift.requiresChargeNurse || hasCharge)) {
     borderColor = "border-green-400";
   } else if (staffCount > 0) {
@@ -183,6 +188,11 @@ function ShiftCell({
               }}
             >
               {softViolationCount} soft
+            </Badge>
+          )}
+          {isOverstaffed && !hasHardViolations && (
+            <Badge className="text-[10px] px-1 py-0 bg-blue-500 text-white">
+              +{excessCount} excess
             </Badge>
           )}
         </div>
@@ -228,6 +238,11 @@ function ShiftCell({
       {shift.actualCensus !== null && (
         <div className="mt-1 text-[10px] text-muted-foreground">
           Census: {shift.actualCensus}
+        </div>
+      )}
+      {isOverstaffed && (
+        <div className="mt-1 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          {excessCount} excess — click for flex-home suggestions
         </div>
       )}
     </button>

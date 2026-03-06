@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,120 @@ interface Rule {
   parameters: Record<string, unknown>;
   weight: number;
   isActive: boolean;
+}
+
+// ── Parameter configuration for hard rules ─────────────────────────────────
+type NumberParam = {
+  key: string;
+  label: string;
+  type: "number";
+  default: number;
+  unit: string;
+  warnIf?: (v: number) => string | null;
+};
+type SelectParam = {
+  key: string;
+  label: string;
+  type: "select";
+  options: number[];
+  default: number;
+};
+type ParamField = NumberParam | SelectParam;
+
+const RULE_PARAMS: Record<string, ParamField[]> = {
+  "rest-hours": [
+    {
+      key: "minRestHours",
+      label: "Min rest between shifts",
+      type: "number",
+      default: 10,
+      unit: "h",
+      warnIf: (v) => (v < 8 ? "Below recommended 8h minimum" : null),
+    },
+  ],
+  "max-consecutive": [
+    {
+      key: "maxConsecutiveDays",
+      label: "Max consecutive days",
+      type: "number",
+      default: 5,
+      unit: "days",
+      warnIf: (v) => (v > 5 ? "Exceeds recommended 5-day maximum" : null),
+    },
+  ],
+  "max-hours-60": [
+    {
+      key: "maxHours",
+      label: "Max hours per 7-day window",
+      type: "number",
+      default: 60,
+      unit: "h",
+      warnIf: (v) =>
+        v < 40
+          ? "Below standard 40h/week — may cause gaps"
+          : v > 72
+          ? "Very high — verify state regulations"
+          : null,
+    },
+  ],
+  "icu-competency": [
+    {
+      key: "minLevel",
+      label: "Min competency level",
+      type: "select",
+      options: [1, 2, 3, 4, 5],
+      default: 2,
+    },
+  ],
+  "level1-preceptor": [
+    {
+      key: "minPreceptorLevel",
+      label: "Min preceptor level",
+      type: "select",
+      options: [3, 4, 5],
+      default: 5,
+    },
+  ],
+  "level2-supervision": [
+    {
+      key: "minSupervisorLevel",
+      label: "Min supervisor level",
+      type: "select",
+      options: [3, 4, 5],
+      default: 4,
+    },
+  ],
+  "on-call-limits": [
+    {
+      key: "maxOnCallPerWeek",
+      label: "Max on-call shifts per week",
+      type: "number",
+      default: 1,
+      unit: "",
+    },
+    {
+      key: "maxOnCallWeekendsPerMonth",
+      label: "Max on-call weekends per month",
+      type: "number",
+      default: 1,
+      unit: "",
+    },
+  ],
+};
+
+// No-overlapping-shifts is always active; hide the toggle
+const LOCKED_RULES = new Set(["no-overlapping-shifts"]);
+
+function paramSummary(evaluatorId: string, parameters: Record<string, unknown>): string {
+  const fields = RULE_PARAMS[evaluatorId];
+  if (!fields) return "";
+  return fields
+    .map((f) => {
+      const value = (parameters[f.key] as number) ?? f.default;
+      if (f.type === "select") return `Level ${value}+`;
+      return `${value}${(f as NumberParam).unit}`;
+    })
+    .join(" · ");
 }
 
 interface CensusBand {
@@ -62,6 +176,9 @@ export default function RulesPage() {
   const [editingBandId, setEditingBandId] = useState<string | null>(null);
   const [bandDraft, setBandDraft] = useState<Partial<CensusBand> | null>(null);
   const [bandSaving, setBandSaving] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [ruleDraft, setRuleDraft] = useState<Record<string, unknown> | null>(null);
+  const [ruleSaving, setRuleSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
     const [rulesRes, bandsRes] = await Promise.all([
@@ -125,6 +242,32 @@ export default function RulesPage() {
     fetchData();
   }
 
+  function startEditRule(rule: Rule) {
+    setEditingRuleId(rule.id);
+    setRuleDraft({ ...rule.parameters });
+  }
+
+  function cancelEditRule() {
+    setEditingRuleId(null);
+    setRuleDraft(null);
+  }
+
+  async function saveRule() {
+    if (!ruleDraft || !editingRuleId) return;
+    const rule = rules.find((r) => r.id === editingRuleId);
+    if (!rule) return;
+    setRuleSaving(true);
+    await fetch(`/api/rules/${editingRuleId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...rule, parameters: ruleDraft }),
+    });
+    setRuleSaving(false);
+    setEditingRuleId(null);
+    setRuleDraft(null);
+    fetchData();
+  }
+
   if (loading) {
     return <p className="text-muted-foreground">Loading...</p>;
   }
@@ -156,39 +299,149 @@ export default function RulesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Rule</TableHead>
-                    <TableHead>Category</TableHead>
+                    <TableHead className="w-52">Rule</TableHead>
+                    <TableHead className="w-24">Category</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead className="w-40">Parameters</TableHead>
+                    <TableHead className="w-24">Status</TableHead>
+                    <TableHead className="w-36"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {hardRules.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{r.category}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-xs text-sm text-muted-foreground">
-                        {r.description}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={r.isActive ? "default" : "secondary"}>
-                          {r.isActive ? "Active" : "Disabled"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleRule(r.id, !r.isActive)}
-                        >
-                          {r.isActive ? "Disable" : "Enable"}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {hardRules.map((r) => {
+                    const evaluatorId = r.parameters.evaluator as string;
+                    const paramFields = RULE_PARAMS[evaluatorId];
+                    const isLocked = LOCKED_RULES.has(evaluatorId);
+                    const isEditing = editingRuleId === r.id;
+                    const summary = paramSummary(evaluatorId, r.parameters);
+
+                    return (
+                      <React.Fragment key={r.id}>
+                        <TableRow>
+                          <TableCell className="font-medium align-top pt-3">{r.name}</TableCell>
+                          <TableCell className="align-top pt-3">
+                            <Badge variant="secondary">{r.category}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground align-top pt-3">
+                            {r.description}
+                          </TableCell>
+                          <TableCell className="align-top pt-3">
+                            {summary ? (
+                              <span className="text-sm font-mono text-primary">{summary}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top pt-3">
+                            {isLocked ? (
+                              <Badge variant="default">Always active</Badge>
+                            ) : (
+                              <Badge variant={r.isActive ? "default" : "secondary"}>
+                                {r.isActive ? "Active" : "Disabled"}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top pt-2">
+                            <div className="flex items-center gap-1">
+                              {paramFields && !isEditing && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditRule(r)}
+                                  disabled={editingRuleId !== null}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                              {!isLocked && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleRule(r.id, !r.isActive)}
+                                  disabled={isEditing}
+                                >
+                                  {r.isActive ? "Disable" : "Enable"}
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+
+                        {isEditing && ruleDraft && paramFields && (
+                          <TableRow className="bg-muted/30">
+                            <TableCell colSpan={6} className="py-3 px-4">
+                              <div className="flex flex-wrap items-end gap-6">
+                                {paramFields.map((field) => {
+                                  const currentVal =
+                                    (ruleDraft[field.key] as number) ?? field.default;
+                                  const warning =
+                                    field.type === "number" && field.warnIf
+                                      ? field.warnIf(currentVal)
+                                      : null;
+                                  return (
+                                    <div key={field.key} className="flex flex-col gap-1">
+                                      <label className="text-xs font-medium text-muted-foreground">
+                                        {field.label}
+                                      </label>
+                                      {field.type === "select" ? (
+                                        <select
+                                          value={currentVal}
+                                          onChange={(e) =>
+                                            setRuleDraft((d) => ({
+                                              ...d,
+                                              [field.key]: Number(e.target.value),
+                                            }))
+                                          }
+                                          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                        >
+                                          {field.options.map((opt) => (
+                                            <option key={opt} value={opt}>
+                                              Level {opt}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <div className="flex items-center gap-1">
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            value={currentVal}
+                                            onChange={(e) =>
+                                              setRuleDraft((d) => ({
+                                                ...d,
+                                                [field.key]: Number(e.target.value),
+                                              }))
+                                            }
+                                            className="h-8 w-20 text-sm"
+                                          />
+                                          {field.unit && (
+                                            <span className="text-xs text-muted-foreground">
+                                              {field.unit}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                      {warning && (
+                                        <p className="text-xs text-amber-600">{warning}</p>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                <div className="flex items-center gap-2 pb-0.5">
+                                  <Button size="sm" onClick={saveRule} disabled={ruleSaving}>
+                                    {ruleSaving ? "Saving…" : "Save"}
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={cancelEditRule}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

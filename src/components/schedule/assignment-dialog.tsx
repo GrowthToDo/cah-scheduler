@@ -91,6 +91,63 @@ export function AssignmentDialog({
 
   if (!shift) return null;
 
+  const excessCount = shift.assignments.length - shift.requiredStaffCount;
+  const isOverstaffed = excessCount > 0;
+
+  /**
+   * Build a ranked flex-home recommendation list.
+   * Uses context from the eligible-staff API for richer signals.
+   * Never recommends the charge nurse. Returns up to `excessCount` entries.
+   */
+  function getFlexRecommendations(): Array<{ assignment: ShiftAssignment; reasons: string[] }> {
+    if (!isOverstaffed) return [];
+
+    const scored = shift!.assignments
+      .filter((a) => !a.isChargeNurse)
+      .map((a) => {
+        const ctx = assignedContext.get(a.staffId);
+        const reasons: string[] = [];
+        let score = 0;
+
+        if (a.isOvertime) {
+          score += 100;
+          reasons.push("On overtime — sending home stops OT clock");
+        }
+        if (ctx?.employmentType === "per_diem") {
+          score += 40;
+          reasons.push("PRN — flex before FTE staff");
+        } else if (ctx?.employmentType === "agency") {
+          score += 50;
+          reasons.push("Agency — flex before permanent staff");
+        }
+        if (ctx && ctx.weeklyHours >= (ctx.standardWeeklyHours ?? 40)) {
+          score += 30;
+          reasons.push(`At FTE target (${ctx.weeklyHours}h / ${ctx.standardWeeklyHours}h)`);
+        } else if (ctx) {
+          score += ctx.weeklyHours; // more hours = higher priority to go home
+        }
+        // Lower competency = can more easily spare (higher score = flex first)
+        score += (5 - a.staffCompetency) * 10;
+        if (a.staffCompetency <= 2 && reasons.length === 0) {
+          reasons.push(`Level ${a.staffCompetency}/5 — lower competency can be spared`);
+        }
+
+        if (reasons.length === 0 && ctx) {
+          reasons.push(`${ctx.weeklyHours}h this week`);
+        }
+
+        return { assignment: a, score, reasons };
+      })
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.assignment.staffLastName.localeCompare(b.assignment.staffLastName);
+      });
+
+    return scored.slice(0, excessCount).map(({ assignment, reasons }) => ({ assignment, reasons }));
+  }
+
+  const flexRecs = getFlexRecommendations();
+
   // A shift still "needs charge" if no VALID charge nurse (Level 4+) is assigned.
   // A Level 3 nurse with isChargeNurse=true satisfies the flag but violates the
   // hard rule, so we must not treat them as a valid charge nurse here.
@@ -110,7 +167,7 @@ export function AssignmentDialog({
         <div className="space-y-4">
           {/* Shift info */}
           <div className="flex gap-2 text-sm flex-wrap">
-            <Badge variant="secondary">
+            <Badge variant={isOverstaffed ? "outline" : "secondary"} className={isOverstaffed ? "border-blue-400 text-blue-700" : ""}>
               {shift.assignments.length}/{shift.requiredStaffCount} staff
             </Badge>
             {needsCharge && (
@@ -160,6 +217,44 @@ export function AssignmentDialog({
               </a>
             </div>
           ) : null}
+
+          {/* Flex-home / VTO recommendations when overstaffed */}
+          {isOverstaffed && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  {excessCount} excess staff — Flex-Home / VTO Suggestions
+                </span>
+                <Badge className="bg-blue-500 text-white text-xs">+{excessCount} excess</Badge>
+              </div>
+              <div className="space-y-2">
+                {flexRecs.map(({ assignment: a, reasons }, i) => (
+                  <div key={a.id} className="rounded border border-blue-200 bg-white px-3 py-2 dark:border-blue-700 dark:bg-blue-900/40">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                        {i + 1}. {a.staffFirstName} {a.staffLastName}
+                      </span>
+                      <Badge variant="secondary" className="text-xs">{a.staffRole}</Badge>
+                      {a.isOvertime && (
+                        <Badge variant="destructive" className="text-xs">OT</Badge>
+                      )}
+                      <span className="text-xs text-blue-600 dark:text-blue-400">
+                        Level {a.staffCompetency}/5
+                      </span>
+                    </div>
+                    <ul className="mt-0.5 ml-2">
+                      {reasons.map((r, j) => (
+                        <li key={j} className="text-[11px] text-blue-700 dark:text-blue-300">• {r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-blue-600 dark:text-blue-400">
+                Offer flex-home (on-call) or VTO to these staff first. Use Remove below to update the schedule if they accept.
+              </p>
+            </div>
+          )}
 
           {/* Current assignments */}
           {shift.assignments.length > 0 && (

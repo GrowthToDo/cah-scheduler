@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { assignment, shift, shiftDefinition, publicHoliday, staffHolidayAssignment } from "@/db/schema";
+import { assignment, shift, shiftDefinition, staff, publicHoliday, staffHolidayAssignment } from "@/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { logAuditEvent } from "@/lib/audit/logger";
@@ -34,9 +34,10 @@ export async function POST(
   // so we always compute it here from the current DB state.
   // durationHours lives on shiftDefinition, so queries join through that table.
   let isOvertime = false;
+  let shiftDef: { durationHours: number; name: string; shiftType: string } | undefined;
   if (shiftRecord) {
-    const shiftDef = db
-      .select({ durationHours: shiftDefinition.durationHours })
+    shiftDef = db
+      .select({ durationHours: shiftDefinition.durationHours, name: shiftDefinition.name, shiftType: shiftDefinition.shiftType })
       .from(shiftDefinition)
       .where(eq(shiftDefinition.id, shiftRecord.shiftDefinitionId))
       .get();
@@ -96,11 +97,18 @@ export async function POST(
     .returning()
     .get();
 
+  const staffRecord = db.select({ firstName: staff.firstName, lastName: staff.lastName, role: staff.role })
+    .from(staff).where(eq(staff.id, body.staffId)).get();
+  const staffName = staffRecord ? `${staffRecord.firstName} ${staffRecord.lastName}` : body.staffId;
+  const shiftLabel = shiftRecord
+    ? `${shiftDef?.name ?? shiftDef?.shiftType ?? "shift"} on ${shiftRecord.date}`
+    : body.shiftId;
+
   logAuditEvent({
     entityType: "assignment",
     entityId: newAssignment.id,
     action: "manual_assignment",
-    description: `Assigned staff ${body.staffId} to shift ${body.shiftId}`,
+    description: `Assigned ${staffName} to ${shiftLabel}${body.isChargeNurse ? " (charge nurse)" : ""}`,
     newState: newAssignment as unknown as Record<string, unknown>,
   });
 
@@ -192,11 +200,23 @@ export async function DELETE(request: Request) {
   db.delete(assignment).where(eq(assignment.id, assignmentId)).run();
 
   if (existing) {
+    const delStaff = db.select({ firstName: staff.firstName, lastName: staff.lastName })
+      .from(staff).where(eq(staff.id, existing.staffId)).get();
+    const delStaffName = delStaff ? `${delStaff.firstName} ${delStaff.lastName}` : existing.staffId;
+    const delShiftRecord = db.select().from(shift).where(eq(shift.id, existing.shiftId)).get();
+    const delShiftDef = delShiftRecord
+      ? db.select({ name: shiftDefinition.name, shiftType: shiftDefinition.shiftType })
+          .from(shiftDefinition).where(eq(shiftDefinition.id, delShiftRecord.shiftDefinitionId)).get()
+      : null;
+    const delShiftLabel = delShiftRecord
+      ? `${delShiftDef?.name ?? delShiftDef?.shiftType ?? "shift"} on ${delShiftRecord.date}`
+      : existing.shiftId;
+
     logAuditEvent({
       entityType: "assignment",
       entityId: assignmentId,
       action: "deleted",
-      description: `Removed assignment of staff ${existing.staffId} from shift ${existing.shiftId}`,
+      description: `Removed ${delStaffName} from ${delShiftLabel}`,
       previousState: existing as unknown as Record<string, unknown>,
     });
   }

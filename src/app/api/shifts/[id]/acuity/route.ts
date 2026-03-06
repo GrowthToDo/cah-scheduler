@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { shift, exceptionLog } from "@/db/schema";
+import { shift, shiftDefinition } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { logAuditEvent } from "@/lib/audit/logger";
 
 /**
  * Update shift acuity level, census, and extra staff requirements
@@ -49,34 +50,45 @@ export async function POST(
     .returning()
     .get();
 
-  // Log census tier / acuity change
-  if (body.acuityLevel !== undefined && existing.acuityLevel !== body.acuityLevel) {
-    db.insert(exceptionLog)
-      .values({
-        entityType: "shift",
-        entityId: id,
-        action: "acuity_changed",
-        description: `Census tier changed from ${existing.acuityLevel || "none"} to ${body.acuityLevel} for shift on ${existing.date}`,
-        previousState: { acuityLevel: existing.acuityLevel, censusBandId: existing.censusBandId },
-        newState: { acuityLevel: body.acuityLevel, censusBandId: body.censusBandId },
-        performedBy: body.performedBy || "nurse_manager",
-      })
-      .run();
+  // Look up shift definition for a readable description (unit + shift type)
+  const shiftDef = db
+    .select({ name: shiftDefinition.name, shiftType: shiftDefinition.shiftType, unit: shiftDefinition.unit })
+    .from(shiftDefinition)
+    .where(eq(shiftDefinition.id, existing.shiftDefinitionId))
+    .get();
+  const shiftLabel = shiftDef
+    ? `${shiftDef.name} (${shiftDef.unit}) on ${existing.date}`
+    : `shift on ${existing.date}`;
+
+  const tierChanged =
+    body.acuityLevel !== undefined && existing.acuityLevel !== body.acuityLevel;
+  const bandChanged =
+    body.censusBandId !== undefined && existing.censusBandId !== body.censusBandId;
+
+  if (tierChanged || bandChanged) {
+    const fromTier = existing.acuityLevel ?? "none";
+    const toTier = (body.acuityLevel ?? existing.acuityLevel) ?? "none";
+    logAuditEvent({
+      entityType: "shift",
+      entityId: id,
+      action: "acuity_changed",
+      description: `Census tier changed from ${fromTier} to ${toTier} for ${shiftLabel}`,
+      previousState: { acuityLevel: existing.acuityLevel, censusBandId: existing.censusBandId },
+      newState: { acuityLevel: body.acuityLevel ?? existing.acuityLevel, censusBandId: body.censusBandId ?? existing.censusBandId },
+      performedBy: body.performedBy ?? "nurse_manager",
+    });
   }
 
-  // Log census change
   if (body.actualCensus !== undefined && existing.actualCensus !== body.actualCensus) {
-    db.insert(exceptionLog)
-      .values({
-        entityType: "shift",
-        entityId: id,
-        action: "census_changed",
-        description: `Census changed from ${existing.actualCensus ?? "not set"} to ${body.actualCensus} for shift on ${existing.date}`,
-        previousState: { actualCensus: existing.actualCensus },
-        newState: { actualCensus: body.actualCensus },
-        performedBy: body.performedBy || "nurse_manager",
-      })
-      .run();
+    logAuditEvent({
+      entityType: "shift",
+      entityId: id,
+      action: "census_changed",
+      description: `Patient census changed from ${existing.actualCensus ?? "not set"} to ${body.actualCensus} for ${shiftLabel}`,
+      previousState: { actualCensus: existing.actualCensus },
+      newState: { actualCensus: body.actualCensus },
+      performedBy: body.performedBy ?? "nurse_manager",
+    });
   }
 
   return NextResponse.json(updated);

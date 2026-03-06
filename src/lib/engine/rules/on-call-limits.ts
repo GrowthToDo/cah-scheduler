@@ -14,9 +14,15 @@ export const onCallLimitsRule: RuleEvaluator = {
   evaluate: (context: RuleContext): RuleViolation[] => {
     const violations: RuleViolation[] = [];
 
-    // Get limits from unit config or use defaults
-    const maxPerWeek = context.unitConfig?.maxOnCallPerWeek ?? 1;
-    const maxWeekendsPerMonth = context.unitConfig?.maxOnCallWeekendsPerMonth ?? 1;
+    // Get limits from rule parameters first, then unit config, then defaults
+    const maxPerWeek =
+      (context.ruleParameters.maxOnCallPerWeek as number) ??
+      context.unitConfig?.maxOnCallPerWeek ??
+      1;
+    const maxWeekendsPerMonth =
+      (context.ruleParameters.maxOnCallWeekendsPerMonth as number) ??
+      context.unitConfig?.maxOnCallWeekendsPerMonth ??
+      1;
 
     // Filter to only on-call assignments
     const onCallAssignments = context.assignments.filter((a) => {

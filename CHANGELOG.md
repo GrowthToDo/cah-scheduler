@@ -6,6 +6,88 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.6.4] - 2026-03-06
+
+### Added
+
+- **Overstaffed shift indicator in schedule grid** (`src/components/schedule/schedule-grid.tsx`).
+
+  When a census tier change causes assigned staff to exceed the shift's required count (e.g., census drops to Blue and 5 nurses are assigned vs. 3 required), the shift cell now shows a **blue border** and a **"+X excess" badge** in the top-right corner. A single-line hint — "X excess — click for flex-home suggestions" — appears at the bottom of the cell. This makes low-census overstaffing immediately visible without cluttering the grid.
+
+- **Flex-home / VTO recommendation panel in assignment dialog** (`src/components/schedule/assignment-dialog.tsx`).
+
+  When a shift is overstaffed, a blue-highlighted panel appears at the top of the assignment dialog (above "Currently Assigned"), listing which staff to offer flex-home or voluntary time off first. Staff are ranked using the following priority:
+
+  1. **On overtime** — sending them home stops the OT clock; immediate payroll saving
+  2. **Agency staff** — flex before permanent staff
+  3. **PRN staff** — flex before full-time employees
+  4. **At or above FTE target hours** — already at their contracted weekly hours
+  5. **Lower competency level** — retain the most experienced nurses on the floor
+
+  The charge nurse is never included in recommendations regardless of any other factor. Each entry shows the staff member's name, role, competency level, OT badge (if applicable), and the specific reason(s) for the recommendation. The note at the bottom of the panel reminds the manager to use the Remove button below if staff accept flex-home, so the schedule reflects the change.
+
+### Files Modified
+
+- `src/components/schedule/schedule-grid.tsx` — overstaffed detection; blue border; `+X excess` badge; hint text; border priority order updated (hard → soft → overstaffed → full → partial)
+- `src/components/schedule/assignment-dialog.tsx` — `getFlexRecommendations()` helper; flex-home panel; staff count badge styled blue when overstaffed
+
+---
+
+## [1.6.3] - 2026-03-06
+
+### Added
+
+- **Hard rules now have configurable parameters** (`src/app/rules/page.tsx`).
+
+  Previously, each hard rule could only be toggled Active or Inactive. Rules with numeric thresholds or level requirements now show their current parameter values in the table and expose an inline **Edit** button. Clicking it expands an editor row directly in the table — no modal, no page navigation.
+
+  Parameters available per rule:
+
+  | Rule | Parameter(s) |
+  |------|-------------|
+  | Minimum Rest Between Shifts | `minRestHours` — number input; amber warning if < 8 h |
+  | Maximum Consecutive Days | `maxConsecutiveDays` — number input; amber warning if > 5 |
+  | Maximum Hours (7-Day Rolling) | `maxHours` — number input; amber warning if < 40 or > 72 |
+  | ICU Competency Minimum | `minLevel` — level selector (1–5) |
+  | Level 1 Must Have Preceptor | `minPreceptorLevel` — level selector (1–5) |
+  | Level 2 ICU/ER Supervision | `minSupervisorLevel` — level selector (1–5) |
+  | On-Call Limits | `maxOnCallPerWeek`, `maxOnCallWeekendsPerMonth` — number inputs |
+
+  On-call limits were previously only configurable via unit configuration; they are now controlled here as rule parameters. The `no-overlapping-shifts` rule shows an "Always active" badge and cannot be toggled or edited.
+
+  The rule engine already read from `context.ruleParameters` with fallbacks — no engine changes were needed. Only the UI and seed defaults were updated.
+
+- **Audit trail: readable descriptions for manual assignments** (`src/app/api/schedules/[id]/assignments/route.ts`).
+
+  Assignment log entries now show full names and shift context instead of raw UUIDs:
+  - Before: `Assigned staff 63457c30-... to shift 820ca5a0-...`
+  - After: `Assigned Sarah Chen to Day Shift on 2026-03-06` (with `(charge nurse)` appended when applicable)
+  - Delete entries: `Removed Sarah Chen from Day Shift on 2026-03-06`
+
+  The fix looks up `staff.firstName`/`lastName` and `shiftDefinition.name`/`shiftType` at log time. If a lookup fails (deleted record), the UUID falls back gracefully.
+
+- **Audit trail: census tier changes now reliably logged** (`src/app/api/shifts/[id]/acuity/route.ts`).
+
+  Census tier saves were being written to the DB by the acuity route, but used `db.insert(exceptionLog)` directly without an explicit timestamp, inconsistent with every other route. Switched to `logAuditEvent()` for consistency. Also fixed a gap: changes to `censusBandId` alone (without an `acuityLevel` change) were previously not logged. Now any change to either field triggers a log entry.
+
+  The description now includes the shift definition name and unit: `"Census tier changed from green to blue for Day Shift (ICU) on 2026-03-06"`.
+
+- **Audit trail page: census and shift events now visible** (`src/app/audit/page.tsx`).
+
+  The `actionLabels` map was missing entries for `acuity_changed` and `census_changed`, causing those entries to render as raw key strings. Added human-readable labels ("Census Tier Changed", "Census Count Changed") and badge colors. Added "Shifts / Census" to the entity filter dropdown and "Census Tier Changed" / "Census Count Changed" to the action filter dropdown.
+
+### Files Modified
+
+- `src/app/rules/page.tsx` — full rewrite; `RULE_PARAMS` config; inline edit row; parameter inputs with warnings; `LOCKED_RULES` set
+- `src/lib/engine/rules/competency-pairing.ts` — `level1-preceptor` reads `minPreceptorLevel`; `level2-supervision` reads `minSupervisorLevel`
+- `src/lib/engine/rules/on-call-limits.ts` — reads `maxOnCallPerWeek` and `maxOnCallWeekendsPerMonth` from `ruleParameters` before falling back to unit config
+- `src/db/seed.ts` — default parameter values seeded for configurable hard rules
+- `src/app/api/schedules/[id]/assignments/route.ts` — POST and DELETE log human-readable staff name and shift label
+- `src/app/api/shifts/[id]/acuity/route.ts` — switched to `logAuditEvent()`; logs on `censusBandId` change too; includes shift name and unit in description
+- `src/app/audit/page.tsx` — added `acuity_changed`/`census_changed` labels; "Shifts / Census" entity filter; census action filters
+
+---
+
 ## [1.6.2] - 2026-03-06
 
 ### Added

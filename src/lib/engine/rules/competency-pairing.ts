@@ -38,11 +38,12 @@ export const level1PreceptorRule: RuleEvaluator = {
       // Find Level 1 staff
       const level1Staff = staffLevels.filter((s) => s.level === 1);
 
-      // If there are Level 1 staff, check for Level 5 preceptor
+      // If there are Level 1 staff, check for preceptor at or above minPreceptorLevel
+      const minPreceptorLevel = (context.ruleParameters.minPreceptorLevel as number) ?? 5;
       if (level1Staff.length > 0) {
-        const hasLevel5 = staffLevels.some((s) => s.level === 5);
+        const hasPreceptor = staffLevels.some((s) => s.level >= minPreceptorLevel);
 
-        if (!hasLevel5) {
+        if (!hasPreceptor) {
           for (const novice of level1Staff) {
             violations.push({
               ruleId: "level1-preceptor",
@@ -50,7 +51,7 @@ export const level1PreceptorRule: RuleEvaluator = {
               ruleType: "hard",
               shiftId,
               staffId: novice.id,
-              description: `${novice.name} (Level 1 Novice) is assigned to ${shiftInfo.shiftType} shift on ${shiftInfo.date} without a Level 5 preceptor on the same shift`,
+              description: `${novice.name} (Level 1 Novice) is assigned to ${shiftInfo.shiftType} shift on ${shiftInfo.date} without a Level ${minPreceptorLevel}+ preceptor on the same shift`,
             });
           }
         }
@@ -111,11 +112,12 @@ export const level2SupervisionRule: RuleEvaluator = {
       // Find Level 2 staff
       const level2Staff = staffLevels.filter((s) => s.level === 2);
 
-      // If there are Level 2 staff, check for Level 4+ supervisor
+      // If there are Level 2 staff, check for supervisor at or above minSupervisorLevel
+      const minSupervisorLevel = (context.ruleParameters.minSupervisorLevel as number) ?? 4;
       if (level2Staff.length > 0) {
-        const hasLevel4OrHigher = staffLevels.some((s) => s.level >= 4);
+        const hasSupervisor = staffLevels.some((s) => s.level >= minSupervisorLevel);
 
-        if (!hasLevel4OrHigher) {
+        if (!hasSupervisor) {
           for (const beginner of level2Staff) {
             violations.push({
               ruleId: "level2-supervision",
@@ -123,22 +125,21 @@ export const level2SupervisionRule: RuleEvaluator = {
               ruleType: "hard",
               shiftId,
               staffId: beginner.id,
-              description: `${beginner.name} (Level 2) is assigned to ${shiftInfo.unit} ${shiftInfo.shiftType} shift on ${shiftInfo.date} without a Level 4+ supervisor`,
+              description: `${beginner.name} (Level 2) is assigned to ${shiftInfo.unit} ${shiftInfo.shiftType} shift on ${shiftInfo.date} without a Level ${minSupervisorLevel}+ supervisor`,
             });
           }
         }
       }
 
-      // Also check: if only Level 3 staff on ICU/ER, that's still problematic
-      // Two Level 3 nurses should not work ICU/ER without Level 4+ supervision
+      // Also check: if max competency on ICU/ER is below minSupervisorLevel, flag the shift
       const maxLevel = Math.max(...staffLevels.map((s) => s.level));
-      if (maxLevel === 3 && staffLevels.length > 0) {
+      if (staffLevels.length > 0 && maxLevel < minSupervisorLevel) {
         violations.push({
           ruleId: "level2-supervision",
           ruleName: "Level 2 ICU/ER Supervision",
           ruleType: "hard",
           shiftId,
-          description: `${shiftInfo.unit} ${shiftInfo.shiftType} shift on ${shiftInfo.date} has no Level 4+ supervisor. ICU/ER requires at least one Level 4 or 5 staff member.`,
+          description: `${shiftInfo.unit} ${shiftInfo.shiftType} shift on ${shiftInfo.date} has no Level ${minSupervisorLevel}+ supervisor. ICU/ER requires at least one Level ${minSupervisorLevel}+ staff member.`,
         });
       }
     }
